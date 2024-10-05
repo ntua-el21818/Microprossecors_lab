@@ -1,0 +1,37 @@
+.include "m328pbdef.inc"
+.equ M = 16 ; Mhz
+.equ req = 1050 ;? ?????????? ??? ???????? ?????? ??  msec
+
+;???????????? ???????
+ldi r24,LOW(RAMEND)
+out SPL,r24
+ldi r24,HIGH(RAMEND)
+out SPH,r24
+clr r24
+
+
+
+main:
+ldi r24,LOW(req)
+ldi r25,HIGH(req)
+rcall wait_x_msec
+jmp main
+
+    
+;loop
+wait_x_msec:
+ldi r26,LOW(15992);1 cycle
+ldi r27,HIGH(15992);1 cycle
+helper:
+    sbiw r26,4 ;2 cycles
+    brne helper ;2 cycles or 1 in the end
+
+;so helper consumes totally 15998
+nop
+nop
+nop
+sbiw r24,1 ;2cycles
+brne wait_x_msec ;2cycles and in the end 1
+ret
+
+
