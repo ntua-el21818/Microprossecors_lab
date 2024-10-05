@@ -1,0 +1,71 @@
+.include "m328pbdef.inc"
+.equ FOSC_MHZ=16    ;MHz; we initialize each cycle to be 1/16 ?sec
+.def A = r16
+.def B = r17
+.def C = r18
+.def D = r19 
+.def complement_B = r20
+.def complement_C = r21 
+.def complement_D = r22 
+.def counter = r23
+.def temp_F0 = r25 ; stores F0 at the end
+.def temp_F1 = r26 ; stores F1 at the end
+.def temp = r27  
+    
+stack_initialize:
+    ldi r24, LOW(RAMEND)
+    out SPL, r24
+    ldi r24, HIGH(RAMEND)
+    out SPH, r24
+    clr r24
+    
+main:
+    ;initialize the registers with their values 
+    ;minus the number we add in each iteration
+    ldi A, 0x50
+    ldi B, 0x3F
+    ldi C, 0x1E
+    ldi D, 0xFD
+    ldi counter, 0x06
+    
+    ser r24
+    out DDRD,r24; Init PORTD as output
+    
+main_loop:
+    subi A, -1
+    subi B, -2
+    subi C, -3
+    subi D, -4
+    
+    mov complement_B, B
+    mov complement_C, C
+    mov complement_D, D
+    mov temp_F0, A
+    mov temp_F1, A
+    mov temp, D
+    
+    com complement_B
+    com complement_C
+    com complement_D
+    
+    ;calculate F0
+    or temp_F0, complement_B
+    or temp, complement_B
+    and temp_F0, temp 
+    com temp_F0 ;value F0
+    
+    out PORTD, temp_F0
+    
+    ;calculate F1
+    and temp_F1, complement_C
+    and complement_D, B
+    or temp_F1, complement_D ;value F1
+        
+    out PORTD, temp_F1
+    
+    dec counter
+    brne main_loop ;loop 6 times
+    
+    rjmp main
+    
+
