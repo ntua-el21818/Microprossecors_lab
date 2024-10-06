@@ -25,9 +25,10 @@ stack_initialize:
     ldi r28,0x01
     out	PORTD,train
     
-    ldi r17, 0x07
+    
     
 transportation:
+    ldi r17, 0x07
     BST r28,1 ;right -> left : code 0 (save to T register)
    
 go_left:
