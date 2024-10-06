@@ -1,0 +1,82 @@
+.include "m328pbdef.inc"
+    
+.equ FOSC_MHZ=16 ;MHz; we initialize each cycle to be 1/16 sec
+.equ req = 1000 ;requested 1 sec delay
+.def train = r16    
+    
+stack_initialize:
+    ldi r24,LOW(RAMEND)
+    out SPL,r24
+    ldi r24,HIGH(RAMEND)
+    out SPH,r24
+    
+    ser r24
+    out DDRD,r24
+    clr r24
+    out DDRB,r24
+    out DDRC,r24
+    
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    
+    
+    ldi train, 0x01 ;start from right -> left : code 0
+		    ;left -> right : code 1
+    ldi r28,0x01
+    out	PORTD,train
+    
+    ldi r17, 0x07
+    
+transportation:
+    BST r28,1 ;right -> left : code 0 (save to T register)
+   
+go_left:
+    rcall wait_x_msec
+    lsl train
+    out PORTD,train
+    
+    dec r17
+    cpi r17, 0x00
+    brne go_left
+    
+    rcall wait_x_msec ;reached the edge wait another second and go right
+    
+    BST r28,0 ;left -> right :code 1
+    
+    ldi r17, 0x07
+    
+go_right:
+    rcall wait_x_msec
+    lsr train
+    out PORTD,train
+    
+    dec r17
+    cpi r17, 0x00
+    brne go_right
+    
+    rcall wait_x_msec ;reached the edge
+    
+    rjmp transportation ;loop again
+    
+
+wait_x_msec:
+ldi r26,LOW(15992);1 cycle
+ldi r27,HIGH(15992);1 cycle
+helper:
+    sbiw r26,4 ;2 cycles
+    brne helper ;2 cycles or 1 in the end
+
+;so helper consumes totally 15998
+nop
+nop
+nop;3 total
+sbiw r24,1 ;2cycles
+brne wait_x_msec ;2cycles and in the end 1
+ldi r24,LOW(req)
+ldi r25,HIGH(req)
+ret ;4 cycles
+    
+
+
+
+
