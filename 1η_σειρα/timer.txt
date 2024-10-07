@@ -1,6 +1,6 @@
 .include "m328pbdef.inc"
 .equ M = 16 ; Mhz
-.equ req = 691 ;requested msec
+.equ req = 300 ;requested msec
 
 ;stack initialisation
 ldi r24,LOW(RAMEND)
@@ -9,12 +9,18 @@ ldi r24,HIGH(RAMEND)
 out SPH,r24
 clr r24
 
-
-
+ser r24
+out ddrd,r24
+clr r24
+ldi r29,0x00
+out portd,r29
+    
 main:
 ldi r24,LOW(req)
 ldi r25,HIGH(req)
 rcall wait_x_msec ;3 cycles
+com r29
+out portd,r29
 jmp main
 
     
@@ -60,4 +66,3 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
-
