@@ -49,17 +49,17 @@ main_loop:
     com complement_D
     
     ;calculate F0
-    or temp_F0, complement_B
-    or temp, complement_B
-    and temp_F0, temp 
+    and temp_F0, complement_B
+    and temp, complement_B
+    or temp_F0, temp 
     com temp_F0 ;value F0
     
     out PORTD, temp_F0
     
     ;calculate F1
-    and temp_F1, complement_C
-    and complement_D, B
-    or temp_F1, complement_D ;value F1
+    or temp_F1, complement_C
+    or complement_D, B
+    and temp_F1, complement_D ;value F1
         
     out PORTD, temp_F1
     
