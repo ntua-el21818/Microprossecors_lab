@@ -10,9 +10,10 @@
     ldi r24,HIGH(RAMEND)
     out SPH,r24
     
+    
+    
     ser r24
     out DDRD,r24
-    ;initialize as inpute, no use for the exercise 
     clr r24
     out DDRB,r24
     out DDRC,r24
@@ -20,14 +21,14 @@
     ldi r24,LOW(req)
     ldi r25,HIGH(req)
     
+    
     ldi train, 0x01 ;start from right -> left : code 0
 		    ;left -> right : code 1
-    ;ldi r28,0x01
+    ldi r28,0xFF
     out	PORTD,train
-    
 transportation:
    
-    clt ;right -> left : code 0 in 6th bit of register SREG
+    clt ;right -> left : code 0
     
     rcall wait_x_msec
     lsl train
@@ -53,7 +54,7 @@ transportation:
     rcall wait_x_msec
     rcall wait_x_msec ;reached the edge
     
-    set ;left -> right : code 1 in 6th bit of register SREG
+    SET ;left -> right :code 1
     
     lsr train
     out PORTD,train
@@ -81,6 +82,7 @@ transportation:
     
     
     
+;loop
 wait_x_msec:
 ldi r26,LOW(15984);1 cycle
 ldi r27,HIGH(15984);1 cycle
@@ -114,9 +116,16 @@ last_msec:
 ;in the last iteration (last msec) we have 15989 cycles
 nop
 nop
-nop
-nop
+;nop
+;nop
 
+    
+    
+ldi r24,LOW(req)
+ldi r25,HIGH(req)
+
+    
+    
 ;extra 4 cycles -> 15993 cycles 
 ret ;4 cycles
     
