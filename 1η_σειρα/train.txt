@@ -12,6 +12,7 @@
     
     ser r24
     out DDRD,r24
+    ;initialize as inpute, no use for the exercise 
     clr r24
     out DDRB,r24
     out DDRC,r24
@@ -26,7 +27,7 @@
     
 transportation:
    
-    clt ;right -> left : code 0 in 6th bit of register
+    clt ;right -> left : code 0 in 6th bit of register SREG
     
     rcall wait_x_msec
     lsl train
@@ -52,7 +53,7 @@ transportation:
     rcall wait_x_msec
     rcall wait_x_msec ;reached the edge
     
-    set ;left -> right : code 1 in 6th bit of register
+    set ;left -> right : code 1 in 6th bit of register SREG
     
     lsr train
     out PORTD,train
@@ -81,21 +82,48 @@ transportation:
     
     
 wait_x_msec:
-ldi r26,LOW(15992);1 cycle
-ldi r27,HIGH(15992);1 cycle
+ldi r26,LOW(15984);1 cycle
+ldi r27,HIGH(15984);1 cycle
 helper:
     sbiw r26,4 ;2 cycles
-    brne helper ;2 cycles or 1 in the end
+    brne helper ;2 cycles or 1 cycle for the last iteration
+;15984 -> helper consumes 15983 cycles
+;so after helper we consume totally 15985 cycles
 
-;so helper consumes totally 15998
+sbiw r24,1 ;2 cycle
+breq last_msec ;1 cycle but if last msec 2 cycles
+
+;for all msec except from the last -> 15985 + 2 + 1 = 15988 cycles
+    
 nop
 nop
-nop;3 total
-sbiw r24,1 ;2cycles
-brne wait_x_msec ;2cycles and in the end 1
-ldi r24,LOW(req)
-ldi r25,HIGH(req)
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop ;10 cycles
+
+;extra 10 cycles -> 15998
+    
+brne wait_x_msec ;2 cycles total 16000 cycles with this operation
+
+last_msec:
+;in the last iteration (last msec) we have 15989 cycles
+nop
+nop
+nop
+nop
+
+;extra 4 cycles -> 15993 cycles 
 ret ;4 cycles
+    
+;with ret and rcall we calculated exactly 16000 cycles again
+;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
+
+
     
 
 
