@@ -114,8 +114,11 @@ last_msec:
 ;in the last iteration (last msec) we have 15989 cycles
 nop
 nop
-nop
-nop
+    
+;we need the following two because we decrease them till zero 
+;and we need to refresh them for the next iteration
+ldi r24,LOW(req)
+ldi r25,HIGH(req)
 
 ;extra 4 cycles -> 15993 cycles 
 ret ;4 cycles
