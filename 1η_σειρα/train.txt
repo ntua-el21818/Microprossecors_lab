@@ -1,7 +1,9 @@
+
+
 .include "m328pbdef.inc"
     
 .equ M = 16 ;Mhz
-.equ req = 150 ;requested 1 sec delay
+.equ req = 100 ;requested 1 sec delay
 .def train = r16    
     
     ;stack set up
@@ -28,7 +30,7 @@
     out	PORTD,train
 transportation:
    
-    BST r28,1 ;right -> left : code 0
+    clt ;right -> left : code 0
     
     rcall wait_x_msec
     lsl train
@@ -54,7 +56,7 @@ transportation:
     rcall wait_x_msec
     rcall wait_x_msec ;reached the edge
     
-    BST r28,0 ;left -> right :code 1
+    set ;left -> right :code 1
     
     lsr train
     out PORTD,train
@@ -99,4 +101,5 @@ ldi r24,LOW(req)
 ldi r25,HIGH(req)
 ret ;4 cycles
     
+
 
