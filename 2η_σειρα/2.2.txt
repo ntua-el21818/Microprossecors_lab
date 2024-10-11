@@ -1,0 +1,126 @@
+.include "m328pbdef.inc"
+.equ M = 16 ; Mhz
+.equ req = 50 ;requested msec
+.def counter = r17
+    
+    .org 0x0
+    rjmp reset
+    .org 0x2
+    rjmp handler
+    
+    
+    
+    reset:
+    ;stack initialisation
+    ldi r24,LOW(RAMEND)
+    out SPL,r24
+    ldi r24,HIGH(RAMEND)
+    out SPH,r24
+    
+    
+    clr r24
+    clr r25
+    
+    
+    ;setting PORTC as input
+    ser r16
+    out DDRC,r16
+    clr r16
+    ;PINB as inputs
+    out DDRB,r16
+    out DDRD,r16
+   
+    ldi r16,2
+    STS EICRA,r16
+    ldi r16,1
+    out EIMSK,r16
+    clr r16
+    sei
+    
+    
+    
+    ;timer initialisation
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    
+  
+    
+    
+    loop:
+    
+    clr counter
+    
+    main:
+    out PORTC,counter
+    rcall wait_x_msec
+    inc counter
+    cpi counter,32
+    brne main
+    jmp loop
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    ;loop
+    wait_x_msec:
+    ldi r26,LOW(15984);1 cycle
+    ldi r27,HIGH(15984);1 cycle
+    helper:
+	sbiw r26,4 ;2 cycles
+	brne helper ;2 cycles or 1 cycle for the last iteration
+    ;15984 -> helper consumes 15983 cycles
+    ;so after helper we consume totally 15985 cycles
+
+    sbiw r24,1 ;2 cycle
+    breq last_msec ;1 cycle but if last msec 2 cycles
+
+    ;for all msec except from the last -> 15985 + 2 + 1 = 15988 cycles
+
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop ;10 cycles
+
+    ;extra 10 cycles -> 15998
+
+    brne wait_x_msec ;2 cycles total 16000 cycles with this operation
+
+    last_msec:
+    ;in the last iteration (last msec) we have 15989 cycles
+    nop
+    nop
+    ;nop
+    ;nop
+
+    ;we need the following two because we decrease them till zero 
+    ;and we need to refresh them for the next iteration
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+
+    ;extra 4 cycles -> 15993 cycles 
+    ret ;4 cycles
+
+    ;with ret and rcall we calculated exactly 16000 cycles again
+    ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
+
+
+
+    handler:
+    
+    sei
+    ret
+
+
+
+
