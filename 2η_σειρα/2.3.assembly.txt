@@ -1,0 +1,117 @@
+.include "m328pbdef.inc"
+.equ req = 700
+.def epoptis = r23
+
+    
+    .org 0x0
+    rjmp reset
+    .org 0x4 
+    rjmp handler_INT1
+    
+    
+    reset:
+    ldi r16,LOW(RAMEND)
+    out SPL,r16
+    ldi r16,HIGH(RAMEND)
+    out SPH,r16
+    
+    
+    
+    ;interrupt enable
+    ldi r16,0x08
+    STS EICRA,r16
+    ldi r16,0x02
+    out EIMSK,r16
+    clr r16
+   
+    out DDRD,r16
+    ser r16
+    out DDRB,r16
+   
+    
+
+   
+    
+    main:
+    clr epoptis
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    sei ;enabling interrupts
+    out PORTB,epoptis
+    rjmp main
+    
+    
+    handler_INT1:
+    
+    cpi epoptis,1
+    breq exception
+    cpi epoptis,63
+    breq exception
+    rjmp normal_function
+    
+    
+    exception:
+    PUSH r24
+    PUSH r25
+    
+    ldi r24,LOW(500)
+    ldi r25,HIGH(500)
+    ldi epoptis,63
+    out PORTB,epoptis
+    rcall wait_x_msec
+    
+    
+    POP r25
+    POP r24
+    rjmp normal_function
+    
+    
+    
+    normal_function:
+    ldi epoptis,1
+    out PORTB,epoptis
+    rcall wait_x_msec
+    reti
+    
+    ;loop
+wait_x_msec:
+ldi r26,LOW(15984);1 cycle
+ldi r27,HIGH(15984);1 cycle
+helper:
+    sbiw r26,4 ;2 cycles
+    brne helper ;2 cycles or 1 cycle for the last iteration
+;15984 -> helper consumes 15983 cycles
+;so after helper we consume totally 15985 cycles
+
+sbiw r24,1 ;2 cycle
+breq last_msec ;1 cycle but if last msec 2 cycles
+
+;for all msec except from the last -> 15985 + 2 + 1 = 15988 cycles
+    
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop ;10 cycles
+
+;extra 10 cycles -> 15998
+    
+brne wait_x_msec ;2 cycles total 16000 cycles with this operation
+
+last_msec:
+;in the last iteration (last msec) we have 15989 cycles
+nop
+nop
+nop
+nop
+
+;extra 4 cycles -> 15993 cycles 
+ret ;4 cycles
+    
+;with ret and rcall we calculated exactly 16000 cycles again
+;so in both cases we end up having 16000 cycles -> 1 msec * (desired time)
