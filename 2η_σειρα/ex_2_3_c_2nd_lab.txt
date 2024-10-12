@@ -1,0 +1,87 @@
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+#define F_CPU 16000000UL
+
+volatile uint8_t led_on = 0;        // indicates if led PB0 is on 
+volatile uint8_t reset_flag = 0;   // flag for interrupt 
+
+ISR(INT1_vect)          // External INT1 interrupt routine (PD3)
+{
+    led_on = 1;         // interrupt occurs, open led PB0
+    reset_flag = 1;
+    EIFR = (1 << INTF1);// Clear the flag of interrupt INTF1
+}
+
+// function for initializing the timer 
+void init_timer1()
+{
+    // Clear Time on Compare Match (CTC mode)
+    TCCR1B |= (1 << WGM12); 
+    // Prescaler = 1024 -> 16MHz/1024 = 15,625 Hz 
+    // Indicates how fast the timer will increase
+    TCCR1B |= (1 << CS12) | (1 << CS10);
+    // For 1 second with F_CPU = 16MHz and prescaler 1024
+    // This will trigger interrupt for comparing each time OCR1A = 15624
+    OCR1A = 15624;      
+    // Enable interrupt for comparing
+    TIMSK1 |= (1 << OCIE1A);
+}
+
+// Interrupt routine of timer1 every second
+ISR(TIMER1_COMPA_vect)
+{
+    static uint8_t seconds = 0;
+    
+    if(led_on)
+    {
+        seconds++;
+        if(seconds >= 5)
+        {
+            PORTB &= ~(1 << PB0); // close led PB0
+            led_on = 0;           // indicates that led PB0 is off
+            seconds = 0;          // reset counter of seconds 
+        }
+    }
+    // if a reset in timer occurs (PD3 pressed again)
+    if (reset_flag) 
+    {
+        reset_flag = 0;          // reset flag of interrupt
+        
+        PORTB |= 0x3F;           // open PB5-PB0
+        _delay_ms(500);          // delay 0.5 seconds
+        PORTB |= 0x01;           // open only PB0
+    }
+    
+            
+}
+
+int main(void) 
+{
+    // Interrupt on rising edge of INT1 pin
+    EICRA = (1 << ISC11) | (1 << ISC10);
+    // Enable the INT1 interrupt mask (PD3)
+    EIMSK = (1 << INT1);// Mask for external interrupt INT1
+    
+    init_timer1();       
+    
+    sei();              // Enable global interrupts
+   
+    
+    DDRB = 0xFF;        // Initialize PORTB as output
+    // remember to check if the following are necessary
+    DDRD &= ~(1 << PD3);// Initialize PD3 as input
+    PORTD |= (1 << PD3);// Initialize pull-up resistor of PD3
+    
+             
+    while (1) 
+    {
+        if(led_on)
+        {
+            PORTB = 0x01;// open led PB0
+            //PORTB |= (1 << PB0); // the same as the above
+        }
+    }
+    return 0;
+}
