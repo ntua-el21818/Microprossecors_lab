@@ -1,13 +1,18 @@
 .include "m328pbdef.inc"
 .equ M = 16 ; Mhz
-.equ req = 50 ;requested msec
+.equ req = 100 ;requested msec
 .def counter = r17
+.def critical = r31
+.def neuron = r30
+.def final = r29
+    
+    
     
     .org 0x0
     rjmp reset
     .org 0x2
-    rjmp handler
-    
+    rjmp handler_INT0
+
     
     
     reset:
@@ -29,7 +34,7 @@
     ;PINB as inputs
     out DDRB,r16
     out DDRD,r16
-   
+    
     ldi r16,2
     STS EICRA,r16
     ldi r16,1
@@ -56,9 +61,79 @@
     inc counter
     cpi counter,32
     brne main
-    jmp loop
+    rjmp loop
     
     
+    handler_INT0:
+    push counter
+    rcall handler_0_brain    
+    andi final,0x0F
+    out PORTC,final
+    pop counter   
+    sei ;enable again
+    reti
+
+    
+    handler_0_brain:
+    in critical,PINB
+    ;com critical
+    andi critical,0x0F
+    clr final
+    clr counter ;will count up to four times
+    rcall first_bit_setup
+    ret
+    
+    
+    first_bit_setup:
+    mov neuron,critical
+    andi neuron,0x01
+    or final,neuron
+    inc counter
+    cpi counter,4
+    breq log_out
+    cpi neuron,0x01
+    breq second_bit_setup
+    lsr critical
+    rjmp first_bit_setup
+    
+
+    second_bit_setup:
+    mov neuron,critical
+    andi neuron,0x02
+    or final,neuron
+    inc counter
+    cpi counter,4
+    breq log_out
+    cpi neuron,0x02
+    breq third_bit_setup
+    lsr critical
+    rjmp second_bit_setup
+
+
+
+    third_bit_setup:
+    mov neuron,critical
+    andi neuron,0x04
+    or final,neuron
+    inc counter
+    cpi counter,4
+    breq log_out
+    cpi neuron,0x04
+    breq fourth_bit_setup
+    lsr critical
+    rjmp third_bit_setup
+
+    
+    fourth_bit_setup:
+    mov neuron,critical
+    andi neuron,0x08
+    or final,neuron
+    out PORTC,final
+    log_out:
+    ret
+    
+
+
     
     
     
@@ -116,10 +191,6 @@
 
 
 
-    handler:
-    
-    sei
-    ret
 
 
 
