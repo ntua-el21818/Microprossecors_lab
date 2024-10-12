@@ -1,13 +1,13 @@
 .include "m328pbdef.inc"
-.equ req = 700
+.equ req = 5000
 .def epoptis = r23
 
     
     .org 0x0
     rjmp reset
     .org 0x4 
-    pop r31
-    pop r30
+    pop r1
+    pop r1
     rcall handler_INT1
     rjmp main
     
@@ -36,8 +36,6 @@
     
     main:
     clr epoptis
-    ldi r24,LOW(req)
-    ldi r25,HIGH(req)
     sei ;enabling interrupts
     out PORTB,epoptis
     rjmp main
@@ -54,18 +52,13 @@
     
     exception:
     
-    PUSH r24
-    PUSH r25
-    
     ldi r24,LOW(500)
     ldi r25,HIGH(500)
+    
+    
     ldi epoptis,63
     out PORTB,epoptis
     rcall wait_x_msec
-    
-    
-    POP r25
-    POP r24
     
     rjmp normal_function
     
@@ -74,6 +67,8 @@
     normal_function:
     ldi epoptis,1
     out PORTB,epoptis
+    ldi r24,LOW(5000)
+    ldi r25,HIGH(5000)
     rcall wait_x_msec
     ret
     
@@ -119,4 +114,5 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time)
+
 
