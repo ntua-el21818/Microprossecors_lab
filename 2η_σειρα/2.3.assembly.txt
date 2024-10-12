@@ -6,8 +6,10 @@
     .org 0x0
     rjmp reset
     .org 0x4 
-    rjmp handler_INT1
-    
+    pop r31
+    pop r30
+    rcall handler_INT1
+    rjmp main
     
     reset:
     ldi r16,LOW(RAMEND)
@@ -42,7 +44,7 @@
     
     
     handler_INT1:
-    
+    sei
     cpi epoptis,1
     breq exception
     cpi epoptis,63
@@ -51,6 +53,7 @@
     
     
     exception:
+    
     PUSH r24
     PUSH r25
     
@@ -63,6 +66,7 @@
     
     POP r25
     POP r24
+    
     rjmp normal_function
     
     
@@ -71,7 +75,7 @@
     ldi epoptis,1
     out PORTB,epoptis
     rcall wait_x_msec
-    reti
+    ret
     
     ;loop
 wait_x_msec:
@@ -115,3 +119,4 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time)
+
