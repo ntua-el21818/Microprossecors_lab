@@ -52,7 +52,7 @@ int main(void)
                     /*counter=500 and not 0 because we have a delay of 0.5 seconds
                      so we need to adjust the counter as if it counted these seconds too*/
                     PORTB = 0x3F;    // open PB5-PB0
-                    _delay_ms(500);  // delay 0.5 msec
+                    _delay_ms(500);  // delay 0.5 sec
                     PORTB = 0x01;    // open only PB0
                 }
             }
