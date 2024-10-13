@@ -1,6 +1,6 @@
 .include "m328pbdef.inc"
 .equ M = 16 ; Mhz
-.equ req = 100 ;requested msec
+.equ req = 200 ;requested msec
 .def counter = r17
 .def critical = r31
 .def neuron = r30
@@ -12,7 +12,7 @@
     rjmp reset
     .org 0x2
     rjmp handler_INT0
-
+    
     
     
     reset:
@@ -35,12 +35,14 @@
     out DDRB,r16
     out DDRD,r16
     
-    ldi r16,2
+    
+    
+    ;ldi r16,2
     STS EICRA,r16
     ldi r16,1
     out EIMSK,r16
     clr r16
-    sei
+  
     
     
     
@@ -50,7 +52,7 @@
     
   
     
-    
+    sei
     loop:
     
     clr counter
@@ -70,7 +72,6 @@
     andi final,0x0F
     out PORTC,final
     pop counter   
-    sei ;enable again
     reti
 
     
@@ -188,6 +189,7 @@
 
     ;with ret and rcall we calculated exactly 16000 cycles again
     ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
+
 
 
 

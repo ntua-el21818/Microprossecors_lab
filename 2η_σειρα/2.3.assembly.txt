@@ -115,4 +115,3 @@ ret ;4 cycles
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time)
 
-
