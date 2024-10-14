@@ -1,11 +1,11 @@
 .include "m328pbdef.inc"
 .equ M = 16 ; Mhz
-.equ req = 200 ;requested msec
+.equ req = 2000 ;requested msec
 .def counter = r17
 .def critical = r31
 .def neuron = r30
 .def final = r29
-    
+.def counter1 = r28
     
     
     .org 0x0
@@ -37,7 +37,7 @@
     
     
     
-    ;ldi r16,2
+    ldi r16,0
     STS EICRA,r16
     ldi r16,1
     out EIMSK,r16
@@ -58,6 +58,7 @@
     clr counter
     
     main:
+   
     out PORTC,counter
     rcall wait_x_msec
     inc counter
@@ -67,20 +68,22 @@
     
     
     handler_INT0:
-    push counter
+    IN R1,SREG
+    PUSH R1
     rcall handler_0_brain    
     andi final,0x0F
     out PORTC,final
-    pop counter   
+    POP R1
+    OUT SREG,R1
     reti
 
     
     handler_0_brain:
     in critical,PINB
-    ;com critical
+    com critical
     andi critical,0x0F
     clr final
-    clr counter ;will count up to four times
+    clr counter1 ;will count up to four times
     rcall first_bit_setup
     ret
     
@@ -89,8 +92,8 @@
     mov neuron,critical
     andi neuron,0x01
     or final,neuron
-    inc counter
-    cpi counter,4
+    inc counter1
+    cpi counter1,4
     breq log_out
     cpi neuron,0x01
     breq second_bit_setup
@@ -102,8 +105,8 @@
     mov neuron,critical
     andi neuron,0x02
     or final,neuron
-    inc counter
-    cpi counter,4
+    inc counter1
+    cpi counter1,4
     breq log_out
     cpi neuron,0x02
     breq third_bit_setup
@@ -116,8 +119,8 @@
     mov neuron,critical
     andi neuron,0x04
     or final,neuron
-    inc counter
-    cpi counter,4
+    inc counter1
+    cpi counter1,4
     breq log_out
     cpi neuron,0x04
     breq fourth_bit_setup
@@ -189,7 +192,6 @@
 
     ;with ret and rcall we calculated exactly 16000 cycles again
     ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
-
 
 
 
