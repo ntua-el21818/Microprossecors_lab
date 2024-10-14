@@ -102,7 +102,7 @@ isr1:
 	; check if EIFR.1 1st bit is zero
 	; if yes, then skip the next operation (jmp or rjmp) 
 	; and continue with the interruption routine
-	sbic EIFR, 1
+	sbic EIFR, 1		
 	jmp clear_flag		; 3 cycles
 	;rjmp clear_flag	; 2 cycles
     ;------------------------------------------------------------
@@ -116,7 +116,7 @@ isr1:
     breq reset
   
 dont_count:
-    out PORTC, counter
+    out PORTC, counter		; if counter < 63, print the answer
 
     
     ; Retrieve r23, r24, r25, r26, SREG from stack
