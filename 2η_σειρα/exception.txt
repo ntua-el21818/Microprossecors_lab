@@ -1,0 +1,77 @@
+#define F_CPU 16000000UL            // needs to be here before #include <util/delay.h>
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
+volatile uint8_t interrupt_flag = 0;// indicates interrupt occurence 
+volatile uint16_t counter = 0;      // counter for timing
+volatile bool exception = FALSE; 
+    
+// External INT1 interrupt routine (PD3)
+ISR(INT1_vect)                      
+{
+    interrupt_flag = 1;             // interrupt occurs, open led PB0
+    counter = 0;                    // reset counter
+    
+    EIFR = (1 << INTF1);            // Clear the flag of interrupt INTF1
+}
+
+
+int main(void) 
+{
+    // Interrupt on falling edge of INT1 pin
+    EICRA = (1 << ISC11) | (0 << ISC10);
+    // Enable the INT1 interrupt mask (PD3)
+    EIMSK = (1 << INT1);    // Mask for external interrupt INT1    
+    
+    sei();                  // Enable global interrupts
+   
+    DDRB = 0xFF;            // Initialize PORTB as output
+    // remember to check if the following are necessary
+    DDRD &= ~(1 << PD3);    // Initialize PD3 as input
+    PORTD |= (1 << PD3);    // Initialize pull-up resistor of PD3
+    
+             
+    while (1) 
+    {
+        if(interrupt_flag)
+        {
+	    if(exception == FALSE) interrupt_flag = 0;
+	    else exception = FALSE;
+		
+	    while(counter < 5000)	// till 5 seconds pass
+	    {
+	        if(interrupt_flag)	
+	        {
+		    break;		// exit the while loop
+		}
+		PORTB = 0x01;		// open led PB0
+		_delay_ms(1);		// delay 1 msec
+		counter++;
+	    }
+            // if interrupt flag is set again 
+            if(interrupt_flag)		
+            {
+		interrupt_flag = 0;
+                counter = 0;    
+		   
+		while(counter < 500)     // till 500 mseconds pass
+		{
+		    if(interrupt_flag)
+		    {
+			exception = TRUE; 
+		        break;		 // exit while loop
+		    }
+		    PORTB = 0x3F;	 // open PB5-PB0
+		    _delay_ms(1);	  
+		    counter++;
+		}
+		interrupt_flag = 1;	 // because we need to enter the 5 sec PB0
+		counter = 500;		 
+            }   
+        }
+	else PORTB = 0x00; 
+    }
+    return 0;
+}
