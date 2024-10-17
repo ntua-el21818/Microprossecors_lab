@@ -112,11 +112,11 @@ isr1:
     rjmp dont_count		; Jump to 'dont_count'
     
     inc counter			; Increase counter
-    cpi counter, 63		; If counter > 63, reset
+    cpi counter, 64		; If counter > 63, reset
     breq reset
   
 dont_count:
-    out PORTC, counter		; if counter < 63, print the answer
+    out PORTC, counter		; if counter <= 63, print the answer
 
     
     ; Retrieve r23, r24, r25, r26, SREG from stack
