@@ -108,7 +108,8 @@ isr1:
     ;------------------------------------------------------------
     
     in r26, PIND		; Read the state of PORTD
-    sbrs r26, 5			; Skip the next instruction if PD5 is set
+    sbrs r26, 5			; Skip the next instruction if PD5 is set (reverse logic)
+				; So it will skip the next instruction if cleared (means PD5 pressed)
     rjmp dont_count		; Jump to 'dont_count'
     
     inc counter			; Increase counter
