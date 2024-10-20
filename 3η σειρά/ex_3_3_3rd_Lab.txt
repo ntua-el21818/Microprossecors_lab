@@ -1,0 +1,152 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+
+#define PWM_PIN PB1         // Pin of PWM
+#define BUTTON_INCR PD1     // Increase Duty Cycle when PD1 pressed
+#define BUTTON_DECR PD2     // Decrease Duty Cycle when PD2 pressed
+
+volatile uint8_t mode = 0;  // If mode = 1 -> means mode1
+                            // If mode = 2 -> means mode2
+
+
+// Global array that contains the various values of Duty Cycle
+int OCR_table[12] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
+uint8_t DC_VALUE = 128;         // Default Duty Cycle (50%)
+uint8_t duty_cycle_index = 6;   // Index in OCR_table corresponding to 50% duty cycle
+
+void PWM_init() 
+{
+    // Initialize PB1 as output
+    DDRB |= (1 << PWM_PIN);
+    
+    // Initialize TMR1A in fast PWM 8-bit mode with non-inverted output
+    // Prescaler = 1, to get 62.5kHz waveform in PB1
+    TCCR1A = (1 << WGM10) | (1 << COM1A1);
+    TCCR1B = (1 << CS10) | (1 << WGM12);
+    // I have deleted the (0 << ... ) i had in assembly code, non necessary ones
+}
+
+void ADC_init() 
+{   
+    /* Chose ADC channel (ADC0) to read from POT1, ends in ...0000
+     * For voltage reference selection: REFS0 = 1, REFS1 = 0 
+     * Right adjustment: ADLAR = 0
+     * ADC0: MUX3 = 0, MUX2 = 0, MUX1 = 0, MUX0 = 0
+     */
+    ADMUX = (1 << REFS0);
+    // Same as the above ADMUX = 0b01000000;
+    
+    /* Enable ADC: ADEN = 1
+     * No conversion from analog to digital yet: ADSC = 0
+     * Disable ADC interrupt: ADIE = 0 
+     * Prescaler: f_ADC = 16MHz / prescaler and
+     * 50kHz <= f_ADC <= 200kHz for 10-bits accuracy. So,
+     * division factor = 128 -> gives f_ADC = 125kHz
+    */ 
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); ;
+    // Same as the above ADCSRA = 0b10000111;
+}
+
+// Read the DC voltage from PB1_PWM analog filter, and take the digital result
+uint16_t ADC_conversion()
+{
+    ADCSRA |= (1 << ADSC);          // Start conversion from analog to digital
+    while(ADCSRA & (1 << ADSC));    // Wait for conversion to end
+    return ADC;                     // Return the value, (ADCH:ADCL)
+}
+
+// Initialize PORTs based on the mode
+void buttons_init(uint8_t mode_value) 
+{
+    if (mode_value == 1) // Mode1 activated
+    {
+        // The following PINs of PORTD are the ones that trigger increase-decrease of Duty Cycle
+        DDRD &= ~((1 << PD1) | (1 << PD2));  // Initialize PD1-PD2 as input (clear their values)
+        PORTD |= (1 << PD1) | (1 << PD2);    // Initialize pull-up resistor of PD1-PD2
+    }
+    else if (mode_value == 2) // Mode2 activated
+    {
+        // Connection of ADC0 with POT1
+        uint16_t ADC_value = ADC_conversion();      // Read POT1
+        DC_VALUE = ADC_value;
+        OCR1A = DC_VALUE;
+    }
+}
+
+/* The following two functions take a pointer to DutyCycleData, 
+ * and modify the original struct directly if inside the boundaries.
+ * 
+ */
+void increase_DC(int index)
+{
+    if(index < 11) // If DC < 98%
+    {
+        index++;
+        DC_VALUE = OCR_table[index];
+        OCR1A = DC_VALUE;
+    }
+}
+
+void decrease_DC(int index)
+{
+    if(index > 0) // If DC > 2%
+    {
+        index--;
+        DC_VALUE = OCR_table[index];
+        OCR1A = DC_VALUE;
+    }
+}
+
+int main(void)
+{ 
+    PWM_init();                         // Initialize PWM
+    
+    // Initialize PD6-PD7 as input (clear their values)
+    // Indicate mode1 or mode2
+    DDRD &= ~((1 << PD7) | (1 << PD6)); 
+        
+    ADC_init();                         // Initialize ADC
+    
+    OCR1A = DC_VALUE;                   // Set initial duty cycle
+    
+    while(1)
+    {
+        if(!(PIND & (1 << PD6)))        // If PD6 pressed, mode1 
+        {
+            mode = 1;
+            buttons_init(mode);
+            mode = 0; 
+            
+            //------------------------------------------------------------------
+            // If both increase and decrease buttons pressed, do nothing
+            if((!(PIND & (1 << BUTTON_INCR))) && (!(PIND & (1 << BUTTON_DECR))))
+            {
+                continue; // Re-enter the while loop and check again
+            }
+            // Check if PD5 is pressed (reverse logic -> PD5 = 0)
+            if(!(PIND & (1 << BUTTON_INCR)))
+            {
+                increase_DC(duty_cycle_index);
+            }
+            // Check if PD6 is pressed (reverse logic -> PD6 = 0)
+            else if(!(PIND & (1 << BUTTON_DECR)))
+            {
+                decrease_DC(duty_cycle_index);
+            }
+            //------------------------------------------------------------------
+        }
+        else if(!(PIND & (1 << PD7)))   // If PD7 pressed, mode2 
+        {
+            mode = 2;
+            buttons_init(mode);
+            mode = 0; 
+        }
+        _delay_ms(100);         // Small delay for better performance
+    }
+    return 0;
+}
+
+

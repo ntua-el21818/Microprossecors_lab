@@ -1,0 +1,201 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+
+#define PWM_PIN PB1             // Pin of PWM
+#define BUTTON_INCR PD5         // Increase Duty Cycle when PD5 pressed
+#define BUTTON_DECR PD6         // Decrease Duty Cycle when PD6 pressed
+
+#define NUM_SAMPLES 16          // Number of samples to average
+
+volatile uint16_t counter = 0;  // counter for timing
+
+typedef struct 
+{
+    uint8_t duty_cycle;     // Duty cycle value
+    int index;              // Index inside the OCR_table
+} DutyCycleData;
+
+// Global array that contains the various values of Duty Cycle
+int OCR_table[12] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
+
+// Function to initialize the struct
+DutyCycleData init_DutyCycle(int index) 
+{
+    DutyCycleData data;
+    
+    // Set the initial duty cycle and index
+    data.duty_cycle = OCR_table[index];
+    data.index = index;
+    
+    return data;
+}
+
+void PWM_init() 
+{
+    // Initialize PB1 as output
+    DDRB |= (1 << PWM_PIN);
+    
+    // Initialize TMR1A in fast PWM 8-bit mode with non-inverted output
+    // Prescaler = 1, to get 62.5kHz waveform in PB1
+    TCCR1A = (1 << WGM10) | (1 << COM1A1);
+    TCCR1B = (1 << CS10) | (1 << WGM12);
+    // I have deleted the (0 << ... ) i had in assembly code, non necessary ones
+}
+
+void ADC_init() 
+{   
+    /* Chose ADC channel (ADC1) to read from PB1_PWM, ends in ...0001
+     * For voltage reference selection: REFS0 = 1, REFS1 = 0 
+     * Right adjustment: ADLAR = 0
+     * ADC1: MUX3 = 0, MUX2 = 0, MUX1 = 0, MUX0 = 1
+     */
+    ADMUX = (1 << REFS0) | (1 << MUX0);
+    // Same as the above ADMUX = 0b01000001;
+    
+    /* Enable ADC: ADEN = 1
+     * No conversion from analog to digital yet: ADSC = 0
+     * Disable ADC interrupt: ADIE = 0 
+     * Prescaler: f_ADC = 16MHz / prescaler and
+     * 50kHz <= f_ADC <= 200kHz for 10-bits accuracy. So,
+     * division factor = 128 -> gives f_ADC = 125kHz
+     */ 
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); ;
+    // Same as the above ADCSRA = 0b10000111;
+}
+
+void PORTs_init() 
+{
+    DDRD |= 0x1F;                        // Initialize PD4-PD0 as output
+    
+    // The following PINs of PORTD are the ones that trigger increase-decrease of Duty Cycle
+    DDRD &= ~((1 << PD5) | (1 << PD6));  // Initialize PD5-PD6 as input (clear their values)
+    PORTD |= (1 << PD5) | (1 << PD6);    // Initialize pull-up resistor of PD5-PD6
+    
+    // A different way of initializing input PORTC for ADC
+    DDRC = 0x00;                         // Initialize PC5-PC0 as input (clear their values)
+    // We need PC1 for ADC1
+    
+}
+
+/* The following two functions take a pointer to DutyCycleData, 
+ * and modify the original struct directly if inside the boundaries.
+ */
+void increase_DC(DutyCycleData *data)
+{
+    if(data->index < 11) // If DC < 98%
+    {
+        data->index++;
+        data->duty_cycle = OCR_table[data->index];
+    }
+}
+
+void decrease_DC(DutyCycleData *data)
+{
+    if(data->index > 0) // If DC > 2%
+    {
+        data->index--;
+        data->duty_cycle = OCR_table[data->index];
+    }
+}
+
+// Read the DC voltage from PB1_PWM analog filter, and take the digital result
+uint16_t ADC_conversion()
+{
+    ADCSRA |= (1 << ADSC);          // Start conversion from analog to digital
+    while(ADCSRA & (1 << ADSC));    // Wait for conversion to end
+    return ADC;                     // Return the value, (ADCH:ADCL)
+}
+
+// Calculate average ADC value
+uint16_t calculate_average()
+{
+    uint32_t sum = 0;               // 32-bit to avoid overflow
+    for(int i = 0; i < NUM_SAMPLES; i++)
+    {
+        sum += ADC_conversion();    // Add the new digital value to sum 
+        
+    }
+    return (sum >> 4);              // Shift 4 times means division with 16 = NUM_SAMPLES
+    
+}
+
+void open_leds(uint16_t ADC_value)
+{
+    PORTD = 0x00;       // May be useless
+    
+    // Determine the case based on ADC_value
+    // Division with 200 to create ranges 
+    switch (ADC_value / 200)
+    {   
+        // If ADC_value is between 0 and 199, ADC_value / 200 equals 0
+        // If ADC_value is between 200 and 399, ADC_value / 200 equals 1 ...
+        case 0: // 0 <= ADC_value < 200
+            PORTD = 0x01;   // Open PB0
+            break;
+        case 1: // 200 <= ADC_value < 400
+            PORTD = 0x02;   // Open PB1
+            break;
+        case 2: // 400 <= ADC_value < 600
+            PORTD = 0x04;   // Open PB2
+            break;
+        case 3: // 600 <= ADC_value < 800
+            PORTD = 0x08;   // Open PB3
+            break;
+        case 4: // 800 <= ADC_value
+            PORTD = 0x10;   // Open PB4
+            break;
+        default:
+            break; // If out-of-bounds            
+    }
+}
+
+int main(void)
+{
+    DutyCycleData data_DC = init_DutyCycle(6); 
+    /* Initial value of duty Cycle = 128 (50%)
+     * This will return duty_cycle value and its index
+     * I can refer to them using &data_DC
+     */
+    
+    PWM_init();                     // Initialize PWM
+    ADC_init();                     // Initialize ADC
+    PORTs_init();                   // Initialize input/output
+    
+    while(1)
+    {
+        while(counter < 100)
+        {
+            counter++;
+            //------------------------------------------------------------------
+            // If both increase and decrease buttons pressed, do nothing
+            if((!(PIND & (1 << BUTTON_INCR))) && (!(PIND & (1 << BUTTON_DECR))))
+            {
+                continue; // Re-enter the while loop and check again
+            }
+            // Check if PD5 is pressed (reverse logic -> PD5 = 0)
+            if(!(PIND & (1 << BUTTON_INCR)))
+            {
+                increase_DC(&data_DC);
+            }
+            // Check if PD6 is pressed (reverse logic -> PD6 = 0)
+            else if(!(PIND & (1 << BUTTON_DECR)))
+            {
+                decrease_DC(&data_DC);
+            }
+        
+            // Update OCR1A register with the new duty cycle value       
+            OCR1A = data_DC.duty_cycle;   
+            //------------------------------------------------------------------
+            _delay_ms(1);       // Delay 1 msec for 100 times
+        } // When 100 msec pass
+              
+        uint16_t avg_value = calculate_average();
+        open_leds(avg_value); // Control LEDs based on average ADC value
+    }
+    return 0;
+}
+
+// I am not sure if delay works as asked
