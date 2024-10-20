@@ -19,18 +19,21 @@ reset:
     ; Initialize PB1 (OC1A) as output
     sbi DDRB, DDB1
     
+    ; Maybe the ones with zeros could be deleted ...
+    
     ; Initialize Timer1 -> TCCR1A in FAST PWM, 8-bit
     ldi r24, (0 << WGM11) | (1 << WGM10) 
     out TCCR1A, r24
     
-    ; The OC1A output of PWM (non-inverting) imer1 will be connected to the PB1 
+    ; The OC1A output of PWM (non-inverting) timer1 will be connected to the PB1 
     ldi r24, (1 << COM1A1) | (0 << COM1A0)
     out TTCR1A, r24
     
     ; f_PWM = 16MHz / (prescaler * 256) 
     ; 256 because we have 8-bit timer = (1 + TOP), where TOP = 255
     ; So if we choose prescaler = 1 (CS10 = 1), f_PWM = 62,5KHz
-    ldi r24, (1 << CS10)
+    ; Initialize Timer1 -> TCCR1B in FAST PWM, 8-bit
+    ldi r24, (1 << CS10) | (1 << WGM12)
     out TCCR1B, r24
     
     ; Initialize the Duty Cycle variable to 50% 
