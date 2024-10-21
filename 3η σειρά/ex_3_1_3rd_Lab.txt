@@ -3,6 +3,8 @@
 .equ DEL_mS = 500		; Delay in mS (valid number from 1 to 4095)
 .equ DEL_NU = FOSC_MHZ * DEL_mS ; _delay_mS routine: (1000*DEL_NU+6) cycles
 
+.equ req = 100 ;requested msec
+    
 .def DC_VALUE = r16		; For Duty Cycle
     
 .org 0x0
@@ -34,6 +36,8 @@ reset:
     ldi r24, (1 << CS10) | (1 << WGM12)
     sts TCCR1B, r24
     
+    sei
+    
     ; Initialize the Duty Cycle variable to 50% 
     ldi DC_VALUE, 6		; Value 128 from the table (50%)
     rcall update_PWM
@@ -47,8 +51,7 @@ loop:
     in r26, PIND		; Read the state of PORTD
     com r26			; Reverse logic, so now if pressed = 1
     andi r26, 0x18		; Mask for PD3, PD4
-    ;mov r25, r26		; Preserve inpute value into r25
-
+    
     cpi r26, 0x18		; If both PINs are pressed, do nothing
     breq loop			; Loop again
     
@@ -57,9 +60,12 @@ loop:
 				; is pressed, then microprocessor understands it as 0
 				; and it does not skip the next operation 
     rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
+    
+    rjmp loop
+    
     sbrc r26, 4			; Skip the next instruction if PD4 is clear
     rcall decreaseDC_triggered	; Jump to 'decreaseDC_triggered', return with ret
-    
+        
     rjmp loop
     
 ; If PD3 is pressed   
@@ -100,9 +106,17 @@ update_PWM:
     ; Is it necessary to adjust the ZH ????????? I think no, because the previous calculation
     ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
-    lpm r24, Z			; Loads the value from program memory LOW (OCR_TABLE) into r24 by default
-    sts OCR1AL, r24		; Update the OCR1A register with the new value
-        
+    lpm 			; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
+    sts OCR1AL, R0		; Update the OCR1A register with the new value
+    
+    push r24
+    push r25
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    rcall wait_x_msec ;3 cycles
+    pop r25
+    pop r24
+    
     ret
     
     
@@ -127,3 +141,46 @@ OCR_table:
     ; 98%: OCR1A = 250
 
 ; The indexing of table begins from 0
+    
+    
+wait_x_msec:
+ldi r26,LOW(15984);1 cycle
+ldi r27,HIGH(15984);1 cycle
+helper:
+    sbiw r26,4 ;2 cycles
+    brne helper ;2 cycles or 1 cycle for the last iteration
+;15984 -> helper consumes 15983 cycles
+;so after helper we consume totally 15985 cycles
+
+sbiw r24,1 ;2 cycle
+breq last_msec ;1 cycle but if last msec 2 cycles
+
+;for all msec except from the last -> 15985 + 2 + 1 = 15988 cycles
+    
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop ;10 cycles
+
+;extra 10 cycles -> 15998
+    
+brne wait_x_msec ;2 cycles total 16000 cycles with this operation
+
+last_msec:
+;in the last iteration (last msec) we have 15989 cycles
+nop
+nop
+nop
+nop
+
+;extra 4 cycles -> 15993 cycles 
+ret ;4 cycles
+    
+;with ret and rcall we calculated exactly 16000 cycles again
+;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
