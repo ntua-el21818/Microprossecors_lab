@@ -17,52 +17,46 @@ reset:
     clr r24
 
     ; Initialize PB1 (OC1A) as output
-    sbi DDRB, DDB1
+    sbi DDRB, 1
     
     ; Maybe the ones with zeros could be deleted ...
     
     ; Initialize Timer1 -> TCCR1A in FAST PWM, 8-bit
-    ldi r24, (0 << WGM11) | (1 << WGM10) 
-    out TCCR1A, r24
-    
     ; The OC1A output of PWM (non-inverting) timer1 will be connected to the PB1 
-    ldi r24, (1 << COM1A1) | (0 << COM1A0)
-    out TTCR1A, r24
+    ldi r24, (0 << WGM11) | (1 << WGM10) | (1 << COM1A1) | (0 << COM1A0)
+    sts TCCR1A, r24
     
     ; f_PWM = 16MHz / (prescaler * 256) 
     ; 256 because we have 8-bit timer = (1 + TOP), where TOP = 255
     ; So if we choose prescaler = 1 (CS10 = 1), f_PWM = 62,5KHz
     ; Initialize Timer1 -> TCCR1B in FAST PWM, 8-bit
     ldi r24, (1 << CS10) | (1 << WGM12)
-    out TCCR1B, r24
+    sts TCCR1B, r24
     
     ; Initialize the Duty Cycle variable to 50% 
     ldi DC_VALUE, 6		; Value 128 from the table (50%)
     rcall update_PWM
     
     ; Initialize PD3, PD4 as inputs
-    ldi r24, 0x18
+    ldi r24, 0xE7
     out DDRD, r24
     
-    ; Another way of doing the above
-    ;cbi DDRD, DDD3            ; PD3 as input
-    ;sbi PORTD, PD3            ; Trigger pull-up registor of PD3
-    ;cbi DDRD, DDD4            ; PD4 as input
-    ;sbi PORTD, PD4            ; Trigger pull-up registor of PD4
     
 loop:
     in r26, PIND		; Read the state of PORTD
+    com r26			; Reverse logic, so now if pressed = 1
+    andi r26, 0x18		; Mask for PD3, PD4
     mov r25, r26		; Preserve inpute value into r25
-    andi r25, 0x18		; Mask for PD3, PD4
+
     cpi r25, 0x18		; If both PINs are pressed, do nothing
     breq loop			; Loop again
     
-    sbrs r26, 3			; Skip the next instruction if PD3 is set
+    sbrc r26, 3			; Skip the next instruction if PD3 is clear
 				; We have reverse logic in input, so if PD3 
 				; is pressed, then microprocessor understands it as 0
 				; and it does not skip the next operation 
     rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
-    sbrs r26, 4			; Skip the next instruction if PD4 is set
+    sbrc r26, 4			; Skip the next instruction if PD4 is clear
     rcall decreaseDC_triggered	; Jump to 'decreaseDC_triggered', return with ret
     
     rjmp loop
@@ -71,7 +65,7 @@ loop:
 increaseDC_triggered:
     ldi r18, 12			; Index of the maximum Duty Cycle value
     cp DC_VALUE, r18		; Compare the two indexes, and if DC_VALUE is greater
-    brge end_increasing		; Don't increase (branch if greater or equal)
+    breq end_increasing		; Don't increase (branch if greater or equal)
     inc DC_VALUE		; Increase the index, means increase another 8% the DC
     rcall update_PWM		; Go update the value from the table
 
@@ -82,7 +76,7 @@ increaseDC_triggered:
 decreaseDC_triggered: 
     ldi r18, 1			; Index of the minimum Duty Cycle value
     cp DC_VALUE, r18		; Compare the two indexes, and if DC_VALUE is less
-    brle end_decreasing		; Don't decrease (branc if less or equal)
+    breq end_decreasing		; Don't decrease (branc if less or equal)
     dec DC_VALUE		; Decrease the index, means decrease another 8% the DC
     rcall update_PWM		; Go update the value from the table
     
@@ -105,11 +99,12 @@ update_PWM:
     ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
     lpm r17, Z			; Loads the value from program memory (OCR_TABLE) into r17
-    out OCR1A, r17		; Update the OCR1A register with the new value
+    sts OCR1AL, r17		; Update the OCR1A register with the new value
     ret
     
     
 ; Define a table that contains precomputed values of OCR1A for various Duty Cycles
+.dseg
 OCR_table:
     .db 5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250
     
