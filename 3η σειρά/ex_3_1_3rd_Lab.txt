@@ -3,7 +3,7 @@
 .equ DEL_mS = 500		; Delay in mS (valid number from 1 to 4095)
 .equ DEL_NU = FOSC_MHZ * DEL_mS ; _delay_mS routine: (1000*DEL_NU+6) cycles
 
-.equ req = 100			;requested msec
+.equ req = 300			;requested msec
     
 .def DC_VALUE = r16		; For Duty Cycle, the index for the correct position in table
     
@@ -11,6 +11,9 @@
     rjmp reset
       
 reset:
+    OCR_table:
+    .db 0x05, 0x1A, 0x2E, 0x43, 0x57, 0x6C, 0x80, 0x94, 0xA7, 0xBD, 0xD2, 0xE6, 0xFB
+    
     ; Stack initialisation
     ldi r24,LOW(RAMEND)
     out SPL,r24
@@ -37,25 +40,35 @@ reset:
     sts TCCR1B, r24
     
    
-    
-    ; Initialize the Duty Cycle variable to 50% 
-    ldi DC_VALUE, 6	; Value 128 from the table (50%)
-    rcall update_PWM
+   
     
     ; Initialize PD3, PD4 as inputs
     ldi r24, 0xE7
     out DDRD, r24
+    clr r24
+    out portd,r24
+    ser r24
+    out ddrc,r24
+    clr r24
     
+    
+    
+    
+    ldi DC_VALUE, 6		; Value 128 from the table (50%)
+    rcall update_PWM
 loop:
     in r26, PIND		; Read the state of PORTD
     com r26			; Reverse logic, so now if pressed = 1
     andi r26, 0x18		; Mask for PD3, PD4
     
-    cpi r26, 0x18		; If both PINs are pressed, do nothing
-    breq loop	; Loop again
-    LDI R31,0xFA
-    STS OCR1AL,R31
-    sbrc r26, 3			; Skip the next instruction if PD3 is clear
+    cpi r26, 0x18		    ; If both PINs are pressed, do nothing
+    breq loop					; Loop again
+    ;LDI R31,0xFA
+    ;STS OCR1AL,R31
+    out portc,DC_VALUE
+    
+    sbrc r26, 3	; Skip the next instruction if PD3 is clear
+    
     rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
 				; We have reverse logic in input, so if PD3 
 				; is pressed, then microprocessor understands it as 0
@@ -69,7 +82,7 @@ loop:
     
 ; If PD3 is pressed   
 increaseDC_triggered:
-    cpi DC_VALUE, 12		; Compare the two indexes, and if DC_VALUE is greater
+    cpi DC_VALUE, 13		; Compare the two indexes, and if DC_VALUE is greater
     breq end_increasing		; Don't increase (branch if greater or equal)
     inc DC_VALUE		; Increase the index, means increase another 8% the DC
     push r24
@@ -123,32 +136,30 @@ decreaseDC_triggered:
 	ret
     
     
-    
-; This label loads from program memory the precomputed values for the PWM Duty Cycle.
-; We use DC_VALUE as the index to select the appropriate value each time, which is 
-    ; the written to the OCR1A register -> adjust the brightness of LED PB1
-    ; We use Z register because we address the program memory where we
-    ; have stored the table's values
+
+				    ; This label loads from program memory the precomputed values for the PWM Duty Cycle.
+				    ; We use DC_VALUE as the index to select the appropriate value each time, which is 
+				    ; the written to the OCR1A register -> adjust the brightness of LED PB1
+				    ; We use Z register because we address the program memory where we
+				    ; have stored the table's values
 update_PWM:
     ldi ZH, high(OCR_table)	; Load high byte of table address into ZH
     ldi ZL, low(OCR_table)	; Load low byte of table address into ZL
   
     add ZL, DC_VALUE		; Add the index (DC_VALUE to the low byte of Z)
     
-    ; Is it necessary to adjust the ZH ????????? I think no, because the previous calculation
-    ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
+				    ; Is it necessary to adjust the ZH ????????? I think no, because the previous calculation
+				    ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
-    ld r0,Z	; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
-   
-    STS OCR1AL,r0		; Update the OCR1A register with the new value
-    
-    
+    lpm r10,Z			; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
+    out portc,r10
+    STS OCR1AL,r10		; Update the OCR1A register with the new value
+  
     ret
     
     
 ; Define a table that contains precomputed values of OCR1A for various Duty Cycles
-OCR_table:
-    .db 0x05, 0x19, 0x2E, 0x42, 0x56, 0x6B, 0x80, 0x94, 0xA8, 0xBC, 0xD1, 0xE5, 0xFA
+
     
 ; The previous values we have calculated: 
     ; For 8-bit PWM, Timer1 has a bandwith from 0 to 255 (0xFF)
@@ -210,4 +221,3 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
-
