@@ -54,7 +54,7 @@ reset:
     
     
     
-    ldi DC_VALUE, 6		; Value 128 from the table (50%)
+    ldi DC_VALUE, 7		; Value 128 from the table (50%)
     rcall update_PWM
 loop:
     in r26, PIND		; Read the state of PORTD
@@ -221,3 +221,4 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
+
