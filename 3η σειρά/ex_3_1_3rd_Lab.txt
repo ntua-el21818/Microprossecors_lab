@@ -46,9 +46,9 @@ loop:
     in r26, PIND		; Read the state of PORTD
     com r26			; Reverse logic, so now if pressed = 1
     andi r26, 0x18		; Mask for PD3, PD4
-    mov r25, r26		; Preserve inpute value into r25
+    ;mov r25, r26		; Preserve inpute value into r25
 
-    cpi r25, 0x18		; If both PINs are pressed, do nothing
+    cpi r26, 0x18		; If both PINs are pressed, do nothing
     breq loop			; Loop again
     
     sbrc r26, 3			; Skip the next instruction if PD3 is clear
@@ -103,6 +103,7 @@ update_PWM:
     ;sts OCR1AL, r24		; Update the OCR1A register with the new value
     ld r24, Z
     sts OCR1AL, r24
+    sts OCR1AH, r25
     ret
     
     
