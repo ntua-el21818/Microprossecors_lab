@@ -36,10 +36,10 @@ reset:
     ldi r24, (1 << CS10) | (1 << WGM12)
     sts TCCR1B, r24
     
-    sei
+   
     
     ; Initialize the Duty Cycle variable to 50% 
-    ldi DC_VALUE, 6		; Value 128 from the table (50%)
+    ldi DC_VALUE, 6	; Value 128 from the table (50%)
     rcall update_PWM
     
     ; Initialize PD3, PD4 as inputs
@@ -52,8 +52,9 @@ loop:
     andi r26, 0x18		; Mask for PD3, PD4
     
     cpi r26, 0x18		; If both PINs are pressed, do nothing
-    breq loop			; Loop again
-    
+    breq loop	; Loop again
+    LDI R31,0xFA
+    STS OCR1AL,R31
     sbrc r26, 3			; Skip the next instruction if PD3 is clear
     rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
 				; We have reverse logic in input, so if PD3 
@@ -71,8 +72,25 @@ increaseDC_triggered:
     cpi DC_VALUE, 12		; Compare the two indexes, and if DC_VALUE is greater
     breq end_increasing		; Don't increase (branch if greater or equal)
     inc DC_VALUE		; Increase the index, means increase another 8% the DC
-    rcall update_PWM		; Go update the value from the table
+    push r24
+    push r25
+    push r26
+    push r27
+    in r1,sreg
+    push r1
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    rcall wait_x_msec ;3 cycles
+    pop r1
+    out sreg,r1
+    pop r27
+    pop r26
+    pop r25
+    pop r24
 
+    rcall update_PWM		; Go update the value from the table
+    
+    
     end_increasing:
 	ret
     
@@ -81,8 +99,26 @@ decreaseDC_triggered:
     cpi DC_VALUE, 1		; Compare the two indexes, and if DC_VALUE is less
     breq end_decreasing		; Don't decrease (branc if less or equal)
     dec DC_VALUE		; Decrease the index, means decrease another 8% the DC
+    
+    push r24
+    push r25
+    push r26
+    push r27
+    in r1,sreg
+    push r1
+    ldi r24,LOW(req)
+    ldi r25,HIGH(req)
+    rcall wait_x_msec ;3 cycles
+    pop r1
+    out sreg,r1
+    pop r27
+    pop r26
+    pop r25
+    pop r24
+    
     rcall update_PWM		; Go update the value from the table
     
+
     end_decreasing:
 	ret
     
@@ -102,19 +138,10 @@ update_PWM:
     ; Is it necessary to adjust the ZH ????????? I think no, because the previous calculation
     ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
-    lpm 			; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
-    mov r17, R0
-    sts OCR1AL, r17		; Update the OCR1A register with the new value
+    ld r0,Z	; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
+   
+    STS OCR1AL,r0		; Update the OCR1A register with the new value
     
-    push r24
-    push r25
-    push r26
-    ldi r24,LOW(req)
-    ldi r25,HIGH(req)
-    rcall wait_x_msec ;3 cycles
-    pop r26
-    pop r25
-    pop r24
     
     ret
     
@@ -183,3 +210,4 @@ ret ;4 cycles
     
 ;with ret and rcall we calculated exactly 16000 cycles again
 ;so in both cases we end up having 16000 cycles -> 1 msec * (desired time) 
+
