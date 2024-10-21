@@ -106,7 +106,7 @@ update_PWM:
 ; Define a table that contains precomputed values of OCR1A for various Duty Cycles
 .dseg
 OCR_table:
-    .db 5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250
+    .db 0x05, 0x19, 0x2E, 0x42, 0x56, 0x6B, 0x80, 0x94, 0xA8, 0xBC, 0xD1, 0xE5, 0xFA
     
 ; The previous values we have calculated: 
     ; For 8-bit PWM, Timer1 has a bandwith from 0 to 255 (0xFF)
