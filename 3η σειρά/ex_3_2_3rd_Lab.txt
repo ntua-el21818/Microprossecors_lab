@@ -19,7 +19,7 @@ typedef struct
 } DutyCycleData;
 
 // Global array that contains the various values of Duty Cycle
-const unsigned int OCR_table[12] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
+const unsigned int OCR_table[13] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
 
 // Function to initialize the struct
 DutyCycleData init_DutyCycle(int index) 
