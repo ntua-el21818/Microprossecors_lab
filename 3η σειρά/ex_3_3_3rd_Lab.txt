@@ -74,7 +74,7 @@ int main(void)
                 continue; // Re-enter the while loop and check again
             }
             
-            // Check if PD5 is pressed (reverse logic -> PD1 = 0)
+            // Check if PD1 is pressed (reverse logic -> PD1 = 0)
             if(PIND == 0b10111101)
             {
                 if(duty_cycle_index < 12) // If DC < 98%
@@ -86,7 +86,7 @@ int main(void)
                     _delay_ms(100);
                 }
             }
-            // Check if PD6 is pressed (reverse logic -> PD2 = 0)
+            // Check if PD2 is pressed (reverse logic -> PD2 = 0)
             if(PIND == 0b10111011)
             {
                 if(duty_cycle_index > 0) // If DC > 2%
