@@ -94,17 +94,19 @@ update_PWM:
     ldi ZH, high(OCR_table)	; Load high byte of table address into ZH
     ldi ZL, low(OCR_table)	; Load low byte of table address into ZL
   
-    add ZL, DC_VALUE		; Add the index (DC_VALUE to the low byte of Z
+    add ZL, DC_VALUE		; Add the index (DC_VALUE to the low byte of Z)
+    
     ; Is it necessary to adjust the ZH ????????? I think no, because the previous calculation
     ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
-    lpm r17, Z			; Loads the value from program memory (OCR_TABLE) into r17
-    sts OCR1AL, r17		; Update the OCR1A register with the new value
+    ;lpm 			; Loads the value from program memory LOW (OCR_TABLE) into r24 by default
+    ;sts OCR1AL, r24		; Update the OCR1A register with the new value
+    ld r24, Z
+    sts OCR1AL, r24
     ret
     
     
 ; Define a table that contains precomputed values of OCR1A for various Duty Cycles
-.dseg
 OCR_table:
     .db 0x05, 0x19, 0x2E, 0x42, 0x56, 0x6B, 0x80, 0x94, 0xA8, 0xBC, 0xD1, 0xE5, 0xFA
     
