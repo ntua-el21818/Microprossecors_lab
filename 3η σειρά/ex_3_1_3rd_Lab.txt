@@ -3,9 +3,9 @@
 .equ DEL_mS = 500		; Delay in mS (valid number from 1 to 4095)
 .equ DEL_NU = FOSC_MHZ * DEL_mS ; _delay_mS routine: (1000*DEL_NU+6) cycles
 
-.equ req = 100 ;requested msec
+.equ req = 100			;requested msec
     
-.def DC_VALUE = r16		; For Duty Cycle
+.def DC_VALUE = r16		; For Duty Cycle, the index for the correct position in table
     
 .org 0x0
     rjmp reset
@@ -46,7 +46,6 @@ reset:
     ldi r24, 0xE7
     out DDRD, r24
     
-    
 loop:
     in r26, PIND		; Read the state of PORTD
     com r26			; Reverse logic, so now if pressed = 1
@@ -56,22 +55,20 @@ loop:
     breq loop			; Loop again
     
     sbrc r26, 3			; Skip the next instruction if PD3 is clear
+    rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
 				; We have reverse logic in input, so if PD3 
 				; is pressed, then microprocessor understands it as 0
 				; and it does not skip the next operation 
-    rcall increaseDC_triggered	; Jump to 'increaseDC_triggered', return with ret
     
-    rjmp loop
-    
+      
     sbrc r26, 4			; Skip the next instruction if PD4 is clear
     rcall decreaseDC_triggered	; Jump to 'decreaseDC_triggered', return with ret
-        
+       
     rjmp loop
     
 ; If PD3 is pressed   
 increaseDC_triggered:
-    ldi r18, 12			; Index of the maximum Duty Cycle value
-    cp DC_VALUE, r18		; Compare the two indexes, and if DC_VALUE is greater
+    cpi DC_VALUE, 12		; Compare the two indexes, and if DC_VALUE is greater
     breq end_increasing		; Don't increase (branch if greater or equal)
     inc DC_VALUE		; Increase the index, means increase another 8% the DC
     rcall update_PWM		; Go update the value from the table
@@ -81,8 +78,7 @@ increaseDC_triggered:
     
 ; If PD4 is pressed  
 decreaseDC_triggered: 
-    ldi r18, 1			; Index of the minimum Duty Cycle value
-    cp DC_VALUE, r18		; Compare the two indexes, and if DC_VALUE is less
+    cpi DC_VALUE, 1		; Compare the two indexes, and if DC_VALUE is less
     breq end_decreasing		; Don't decrease (branc if less or equal)
     dec DC_VALUE		; Decrease the index, means decrease another 8% the DC
     rcall update_PWM		; Go update the value from the table
@@ -107,13 +103,16 @@ update_PWM:
     ; won't cause any carry (0-12 indexes need 4-bits, and ZL is 8-bit register)
     
     lpm 			; Loads the value from program memory LOW (OCR_TABLE) into R0 by default
-    sts OCR1AL, R0		; Update the OCR1A register with the new value
+    mov r17, R0
+    sts OCR1AL, r17		; Update the OCR1A register with the new value
     
     push r24
     push r25
+    push r26
     ldi r24,LOW(req)
     ldi r25,HIGH(req)
     rcall wait_x_msec ;3 cycles
+    pop r26
     pop r25
     pop r24
     
