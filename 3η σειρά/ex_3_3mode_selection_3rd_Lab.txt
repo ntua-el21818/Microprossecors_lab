@@ -1,0 +1,144 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+
+unsigned char OCR_table[13] = {0x05, 0x19, 0x2E, 0x42, 0x56, 0x6B, 0x80, 0x94, 0xA8, 0xBC, 0xD1, 0xE5, 0xFA};
+    
+int mode = 0;                   // Variable that indicates the mode 
+
+void PWM_init() 
+{
+    // Initialize TMR1A in fast PWM 8-bit mode with non-inverted output
+    // Prescaler = 1, to get 62.5kHz waveform in PB1
+    TCCR1A = (1 << WGM10) | (1 << COM1A1);
+    TCCR1B = (1 << CS10) | (1 << WGM12);
+    // I have deleted the (0 << ... ) i had in assembly code, non necessary ones
+}
+
+void ADC_init() 
+{   
+    /* Chose ADC channel (ADC0) to read from POT1, ends in ...0000
+     * For voltage reference selection: REFS0 = 1, REFS1 = 0 
+     * Right adjustment: ADLAR = 0
+     * ADC0: MUX3 = 0, MUX2 = 0, MUX1 = 0, MUX0 = 0
+     */
+    ADMUX = (1 << REFS0);
+    // Same as the above ADMUX = 0b01000000;
+    
+    /* Enable ADC: ADEN = 1
+     * No conversion from analog to digital yet: ADSC = 0
+     * Disable ADC interrupt: ADIE = 0 
+     * Prescaler: f_ADC = 16MHz / prescaler and
+     * 50kHz <= f_ADC <= 200kHz for 10-bits accuracy. So,
+     * division factor = 128 -> gives f_ADC = 125kHz
+    */ 
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); ;
+    // Same as the above ADCSRA = 0b10000111;
+}
+
+// Read the DC voltage from PB1_PWM analog filter, and take the digital result
+uint16_t ADC_conversion()
+{
+    ADCSRA |= (1 << ADSC);          // Start conversion from analog to digital
+    while(ADCSRA & (1 << ADSC));    // Wait for conversion to end
+    return ADC;                     // Return the value, (ADCH:ADCL)
+}
+
+void select_mode()
+{
+    if(PIND == 0b10111111)              // If PD6 pressed, mode1 
+    {   
+        _delay_ms(100);
+        //while(PIND != 0b11111111) {}; // For debouncing
+        
+        mode = 1;                       // Mode 1, waiting for PD1-PD2
+    }
+    if(!(PIND & (1 << PD7)))            // If PD7 pressed, mode2 
+    {
+        _delay_ms(100);
+        //while(PIND != 0b11111111) {}; // For debouncing 
+
+        mode = 2;                       // Mode 2, waiting for POT1
+    }
+}
+
+int main(void)
+{ 
+    PWM_init();          // Initialize PWM
+    
+    // Initialize PD6-PD7 as input (clear their values)
+    // Indicate mode1 or mode2
+    // Initialize PD1-PD2 as input (clear their values)
+    // The ones that trigger increase-decrease of Duty Cycle
+    
+    DDRB = 0b00111111;  // as output
+    DDRD = 0x00000000;  // as input
+        
+    ADC_init();         // Initialize ADC
+    
+    
+    int DC_VALUE = 0x80;            // Default Duty Cycle (50%)
+    int duty_cycle_index = 6;       // Index in OCR_table corresponding to 50% duty cycle
+    
+    
+    OCR1A = DC_VALUE;               // Set initial duty cycle
+    _delay_ms(100);
+    
+       
+    while(1)
+    { 
+        select_mode();
+        
+        if(mode == 1){
+            while(mode == 1)
+            {
+                // Check if PD1 is pressed (reverse logic -> PD1 = 0)
+                if(PIND == 0b11111101)
+                {
+                    if(duty_cycle_index < 12) // If DC < 98%
+                    {
+                        duty_cycle_index++;
+                        DC_VALUE = OCR_table[duty_cycle_index];
+                
+                        OCR1A = DC_VALUE;
+                        _delay_ms(100);
+                }
+                
+            }
+            // Check if PD2 is pressed (reverse logic -> PD2 = 0)
+            if(PIND == 0b11111011)
+            {
+                if(duty_cycle_index > 0) // If DC > 2%
+                {
+                    duty_cycle_index--;
+                    DC_VALUE = OCR_table[duty_cycle_index];
+                
+                    OCR1A = DC_VALUE;
+                    _delay_ms(100);
+                }
+                
+            }
+            select_mode();
+            }
+            
+            //------------------------------------------------------------------
+        }
+        else if(mode == 2)   // If PD7 pressed, mode2 
+        {
+            while(mode == 2)
+            {
+                // Connection of ADC0 with POT1
+                uint16_t ADC_value = ADC_conversion();      // Read POT1
+                DC_VALUE = ADC_value;
+                OCR1A = DC_VALUE;
+                //_delay_ms(100);         // Small delay for better performance            
+                
+                select_mode();
+            }
+        }
+        
+    }
+}
+
+
