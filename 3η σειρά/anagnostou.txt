@@ -4,56 +4,31 @@
 #include <stdint.h>
 
 
- int counter; 
- uint16_t result;
- int current_index = 6;
- int OCR_table[13];
+int counter; 
+uint16_t result;
+uint8_t input;
+int current_index = 6;
  
+unsigned const int OCR_table[13] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
 
- uint8_t input;
-
-int main(void){
-    DDRC = 0x00;
-    PORTC = 0x00;
+int main(void){  
     
-    
-    DDRB = 0xFF;//portb outputs 
-    DDRD = 0x9F;//5 first bits as output and the pd7(last))
+    DDRB = 0xFF;        //PORTB outputs 
+    DDRD = 0x9F;        //5 first bits as output and the PD7 (last)
     PORTB = 0x00;
     PORTD = 0x00;
-    
-    //for debugging purposes and only that
-    DDRC = 0xff;
-    PORTC = 0x00;
-    //end 
-    
-    
-    
     
     //set up
     TCCR1B = 0x0C;
     TCCR1A = 0x81;
     
+    //TCCR1A = (1 << WGM10) | (1 << COM1A1);
+    //TCCR1B = (1 << CS10) | (1 << WGM12);
+    
 
-    //ADC initialise
+    //ADC initialize
     ADMUX = (1 << REFS0) | (1 << MUX0);
-    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (0 << ADPS0); 
-    
-    OCR_table[0] = 5;
-    OCR_table[1] = 25;
-    OCR_table[2] = 46;
-    OCR_table[3] = 66;
-    OCR_table[4] = 86;
-    OCR_table[5] = 107;
-    OCR_table[6] = 128;
-    OCR_table[7] = 148;
-    OCR_table[8] = 168;
-    OCR_table[9] = 188;
-    OCR_table[10] = 209;
-    OCR_table[11] = 229;
-    OCR_table[12] = 250;
-   
-    
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);     
  
     while(1){
         counter = 0;
@@ -61,11 +36,9 @@ int main(void){
         while (counter!=16){
             input = ~PIND;
             input = (input & 0x60);
-            //input = ~0xFF;
-            //PORTC |= (input >> 1);
             
             OCR1AL = OCR_table[current_index];
-            //PORTC = current_index;
+
             if(input == 0x60) continue;
             else if ((input == 0x20) && (current_index != 0)) { //lower if pd5
                 current_index--;
@@ -77,18 +50,12 @@ int main(void){
                 //PORTC = OCR_table[current_index];
                 OCR1AL = OCR_table[current_index];
             }
-            
-     
-            
-            
-            
+                      
             _delay_ms(100);
                 
             ADCSRA |= 0x40; //start adc
             while((ADCSRA&0x40)!= 0x00){}  //while ?he conversion last hold fast
             result = result + ADC;
-            
-            
             
             counter++;
         }
