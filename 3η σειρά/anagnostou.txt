@@ -30,10 +30,12 @@ int main(void){
     ADMUX = (1 << REFS0) | (1 << MUX0);
     ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);     
  
-    while(1){
+    while(1)
+    {
         counter = 0;
         result = 0x00;
-        while (counter!=16){
+        while (counter!=16)
+        {
             input = ~PIND;
             input = (input & 0x60);
             
@@ -53,8 +55,8 @@ int main(void){
                       
             _delay_ms(100);
                 
-            ADCSRA |= 0x40; //start adc
-            while((ADCSRA&0x40)!= 0x00){}  //while ?he conversion last hold fast
+            ADCSRA |= 0x40;                 //start ADC
+            while((ADCSRA&0x40)!= 0x00){}   //while ?he conversion last hold fast
             result = result + ADC;
             
             counter++;
@@ -63,19 +65,10 @@ int main(void){
         result = (result >> 4);
         
         if (result >= 0 && result <= 200) PORTD = 0x01;
-        else if ((result>=200) && (result <= 400)) PORTD = 0x02;
+        else if (result <= 400) PORTD = 0x02;
         else if (result <= 600) PORTD = 0x04;
         else if (result <= 800) PORTD = 0x08;
         else PORTD = 0x10;    
-        
-       
-        
-    
-    
+            
     }
-    
-
-
-
-
 }
