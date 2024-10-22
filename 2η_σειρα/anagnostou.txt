@@ -1,0 +1,78 @@
+#define F_CPU 16000000UL  // 16 MHz
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdint.h>
+
+int main(){
+    DDRC = 0x00;
+    PORTC = 0x00;
+    
+    
+    DDRB = 0xFC;//pb0 and pb1 inputs 
+    DDRD = 0x1F;//5 first bits as output
+    PORTB = 0x00;
+    PORTD = 0x00;
+    
+    
+    //set up
+    TCCR1B = 0x0C;
+    TCCR1A = 0x81;
+    
+
+    //ADC initialise
+    ADMUX = (1 << REFS0) | (1 << MUX0);
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); 
+    
+    
+    int counter; 
+    uint16_t result;
+    int current_index = 5;
+    int OCR_table[13] = {5, 25, 46, 66, 86, 107, 128, 148, 168, 188, 209, 229, 250};
+    
+    while(1){
+        counter = 0;
+        result = 0;
+        while (counter!=100){
+            char input = ~PORTB;
+            
+            if(PORTB == 0x03) continue;
+            else if (PORTB == 0x01 & current_index != 0 ) { //lower if pb0
+                current_index--;
+                OCR1AL = OCR_table[current_index];
+            }
+            else if (PORTB == 0x02 & current_index != 12){ //higher if pb1 is pressed
+                current_index++;
+                OCR1AL = OCR_table[current_index];
+            }
+        
+            _delay_ms(1);
+            counter++;
+        }
+        counter = 0; 
+        while(counter != 16){
+            ADCSRA |= 0x40; //start adc
+            
+            while((ADCSRA&0x40)!= 0x00){//while ?he conversion last hold fast
+                }
+            result = result + ADC;
+            counter++;
+        }
+        result = (result << 4) | (result >> 12);
+        
+        if (result <= 200) PORTD = 0x01;
+        else if (result <= 400) PORTD = 0x02;
+        else if (result <= 600) PORTD = 0x04;
+        else if (result <= 800) PORTD = 0x08;
+        else PORTD = 0x10;    
+        
+        
+        
+    
+    
+    }
+    
+
+
+
+
+}
