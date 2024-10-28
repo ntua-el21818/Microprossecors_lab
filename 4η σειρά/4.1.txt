@@ -1,0 +1,326 @@
+.include "m328pbdef.inc"
+
+    
+.equ PD0=0 
+.equ PD1=1 
+.equ PD2=2 
+.equ PD3=3 
+.equ PD4=4 
+.equ PD5=5 
+.equ PD6=6 
+.equ PD7=7 
+.equ time_essential = 49910
+.def div1 = r20
+.def initiator = r16 ;used for pre-building and setting purposes...
+
+
+
+.org 0x0
+    rjmp start
+.org 0x1A
+    rjmp time_has_come
+.org 0x2A
+    rjmp ADC_ready
+    
+    
+    
+    start:
+	ldi r27,10
+    
+    
+	ser initiator
+	
+	out DDRD,initiator
+	out DDRC,initiator
+	out DDRB,initiator
+	
+	clr initiator
+	
+	out PORTB,initiator
+	out PORTC,initiator
+	out PORTD,initiator
+	
+	out EIMSK,initiator ;ensure every other interrupt is disabled
+	
+
+	rcall lcd_init
+	
+	
+	
+	
+	sei ;enable interrupts
+	
+	ldi initiator,LOW(RAMEND)
+	out SPL,initiator
+	ldi initiator,HIGH(RAMEND)
+	out SPH,initiator
+	clr initiator
+	
+	;pre-building ADC
+	ldi initiator,0x41 ;ADC1 as input
+	sts ADMUX,initiator
+	ldi initiator,0x8F ;enable conversion done interrupt
+	sts ADCSRA,initiator
+	;adc completed
+	
+	
+	
+	
+	;initialise counter-timer
+	clr initiator
+	sts TCCR1B,initiator;ensuring counter is not yet counting and is frozen | WGM13,WGM12 -> 0 
+	sts TCCR1A,initiator;WGM11,WGM10 -> 0 //WE WANT NORMAL FUNCTION...NO PWM
+	ldi initiator,0x01
+	sts TIMSK1,initiator ;allowing overflow interrupts for the near future
+	;we choose clk/1024 = 15.625hz and timer has 16 bits so it counts from 0 all the way up to 65.535
+	;so to have an interrupt overflow every 1 sec we need to start the count from 65.535-1*15.625 = 49910 = time_essential...
+	
+	;preload the tcnt1 with the correct time_essential
+	ldi initiator,HIGH(time_essential)
+	sts TCNT1H,initiator
+	ldi initiator,LOW(time_essential)
+	sts TCNT1L,initiator
+	
+	ldi initiator,0x05
+	sts TCCR1B,initiator ;timer has started now
+	
+	
+	
+	main:
+	rjmp main ;looping
+    
+        
+
+
+
+
+    time_has_come:
+	
+	clr initiator ;we can test it without stopping the timer on ntuaboard for fun! But this is more secure
+	sts TCCR1B,initiator ;defuse timer 
+	ldi initiator,HIGH(time_essential) ;reload TCNT1 to time_essential
+	sts TCNT1H,initiator
+	ldi initiator,LOW(time_essential)
+	sts TCNT1L,initiator
+	ldi initiator,0x05
+	sts TCCR1B,initiator ;restart
+	
+	
+	
+	ldi initiator,0xCF ;setting adsc to 1...now the convertion has been started
+	;the job now is done...waiting for the completion interrupt to happen...nothing we can do
+	reti
+    
+
+
+
+    ADC_ready:
+	rcall lcd_clear_display
+	
+	lds r31,ADCH
+	lds r30,ADCL
+	
+	lsl r30
+	rol r31 
+	
+	lsl r30
+	rol r31 
+	
+	add r30,r30
+	adc r31,r31 ;*5 
+	
+	
+	;/1024
+	;Vin = 5*adc/2^10
+	clr div1
+	rcall helper
+	
+	mov r24,div1
+	rcall lcd_data
+	
+	ldi r24,'.'
+	rcall lcd_data
+	
+      
+	
+	mul r31,r27 ;multiplying to get first decimal
+	clr div1
+	rcall helper
+	mov r24,div1
+	rcall lcd_data
+	
+	
+	mul r31,r27;second_decimal
+	clr div1
+	rcall helper_div
+	mov r24,div1
+	rcall lcd_data
+	
+	
+	
+	
+	
+	reti
+	
+    helper_div:
+    subi r31,0x04
+    cpi r31,0x04; -1024
+    brlo helper_done
+    inc div1
+    
+    helper_done:
+	ret
+	
+    
+	
+wait_x_msec:
+ldi r26,LOW(15984);1 cycle
+ldi r27,HIGH(15984);1 cycle
+helper:
+    sbiw r26,4 ;2 cycles
+    brne helper ;2 cycles or 1 cycle for the last iteration
+;15984 -> helper consumes 15983 cycles
+;so after helper we consume totally 15985 cycles
+
+sbiw r24,1 ;2 cycle
+breq last_msec ;1 cycle but if last msec 2 cycles
+
+;for all msec except from the last -> 15985 + 2 + 1 = 15988 cycles
+    
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop ;10 cycles
+
+;extra 10 cycles -> 15998
+    
+brne wait_x_msec ;2 cycles total 16000 cycles with this operation
+
+last_msec:
+;in the last iteration (last msec) we have 15989 cycles
+nop
+nop
+nop
+nop
+
+;extra 4 cycles -> 15993 cycles 
+ret ;4 cycles
+    
+;with ret and rcall we calculated exactly 16000 cycles again
+;so in both cases we end up having 16000 cycles -> 1 msec * (desired time)
+    
+lcd_init: 
+
+		    ldi r24 ,low(200)  ; 
+		    ldi r25 ,high(200)  ; Wait 200 mSec 
+		    rcall wait_x_msec  ; 
+
+		    ldi r24 ,0x30   ; command to switch to 8 bit mode 
+		    out PORTD ,r24  ; 
+		    sbi PORTD ,PD3  ; Enable  Pulse 
+		    nop 
+		    nop 
+		    cbi PORTD ,PD3 
+		    ldi r24 ,30   ; 
+		    ldi r25 ,0   ; Wait 250uSec  
+		    rcall wait_x_msec           ; 
+
+		    ldi r24 ,0x30   ; command to switch to 8 bit mode 
+		    out PORTD ,r24  ; 
+		    sbi PORTD ,PD3  ; Enable  Pulse  
+		    nop 
+		    nop 
+		    cbi PORTD ,PD3 
+		    ldi r24 ,30   ; 
+		    ldi r25 ,0   ; Wait 250uSec  
+		    rcall wait_x_msec           ; 
+
+		    ldi r24 ,0x30   ; command to switch to 8 bit mode 
+		    out PORTD ,r24  ; 
+		    sbi PORTD ,PD3  ; Enable  Pulse  
+		    nop 
+		    nop 
+		    cbi PORTD ,PD3 
+		    ldi r24 ,30                  ; 
+		    ldi r25 ,0                   
+		    rcall wait_x_msec 
+
+		    ldi r24 ,0x20                ; command to switch to 4 bit mode 
+		    out PORTD ,r24 
+		    sbi PORTD ,PD3  ; Enable  Pulse 
+		    nop 
+		    nop 
+		    cbi PORTD ,PD3 
+		    ldi r24 ,30                  ; 
+		    ldi r25 ,0                   
+		    rcall wait_x_msec 
+
+		    ldi r24 ,0x28              ;  5x8 dots, 2 lines 
+		    rcall lcd_command 
+
+		    ldi r24 ,0x0c                ; dislay on, cursor off 
+		    rcall lcd_command   
+		    rcall lcd_clear_display       
+ 
+		    ldi r24 ,0x06                ; Increase address, no display shift 
+		    rcall lcd_command        ;    
+	ret  
+	
+	write_2_nibbles: 
+		
+		push r24         ; save r24(LCD_Data) 
+
+		in r25 ,PIND       ; read PIND 
+
+		andi r25 ,0x0f  ;  
+		andi r24 ,0xf0       ; r24[3:0] Holds previus PORTD[3:0] 
+		add r24 ,r25     ; r24[7:4] <-- LCD_Data_High_Byte 
+		out PORTD ,r24  ; 
+
+		sbi PORTD ,PD3  ; Enable  Pulse 
+		nop 
+		nop 
+		cbi PORTD ,PD3 
+
+		pop r24     ; Recover r24(LCD_Data) 
+		swap r24   ; 
+		andi r24 ,0xf0  ; r24[3:0] Holds previus PORTD[3:0]   
+		add r24 ,r25   ; r24[7:4] <-- LCD_Data_Low_Byte 
+		out PORTD ,r24 
+
+		sbi PORTD ,PD3  ; Enable  Pulse 
+		nop 
+		nop 
+		cbi PORTD ,PD3 
+
+		ret
+		
+	lcd_data: 
+		sbi PORTD ,PD2  ; LCD_RS=1(PD2=1), Data 
+		rcall write_2_nibbles     ; send data 
+		ldi r24 ,30           ; 
+		ldi r25 ,0                    
+		rcall wait_x_msec 
+		ret 
+
+	lcd_command: 
+		cbi PORTD ,PD2         
+		rcall write_2_nibbles    
+		ldi r24 ,30                 
+		ldi r25 ,0                   
+		rcall wait_x_msec 
+		ret 
+	
+	lcd_clear_display: 
+		ldi r24 ,0x01                
+		rcall lcd_command 
+		ldi r24 ,low(5)  
+		ldi r25 ,high(5)  
+		rcall wait_x_msec  
+		ret
