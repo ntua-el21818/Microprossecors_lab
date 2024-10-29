@@ -19,32 +19,34 @@
     rjmp start
 .org 0x1A
     rjmp time_has_come
-.org 0x2A
+.org 0x02A
     rjmp ADC_ready
     
     
     
     start:
-	ldi r27,10
-    
+	ldi r27,10 ;for multiplying purposes
+	ldi r29,'0';for turning the digits to ascii characters.
     
 	ser initiator
 	
 	out DDRD,initiator
-	out DDRC,initiator
+	
 	out DDRB,initiator
 	
 	clr initiator
+	out DDRC,initiator
+	
 	
 	out PORTB,initiator
-	out PORTC,initiator
+	
 	out PORTD,initiator
 	
-	out EIMSK,initiator ;ensure every other interrupt is disabled
+	out EIMSK,initiator ;ensure every other normal interrupt is disabled
 	
 
 	rcall lcd_init
-	
+	rcall lcd_clear_display
 	
 	
 	
@@ -59,8 +61,8 @@
 	;pre-building ADC
 	ldi initiator,0x41 ;ADC1 as input
 	sts ADMUX,initiator
-	ldi initiator,0x8F ;enable conversion done interrupt
-	sts ADCSRA,initiator
+	ldi initiator,0x8F ;enable conversion-done interrupt
+	sts ADCSRA,initiator;sts it to ADCSRA
 	;adc completed
 	
 	
@@ -95,7 +97,7 @@
 
 
     time_has_come:
-	
+	sei
 	clr initiator ;we can test it without stopping the timer on ntuaboard for fun! But this is more secure
 	sts TCCR1B,initiator ;defuse timer 
 	ldi initiator,HIGH(time_essential) ;reload TCNT1 to time_essential
@@ -108,6 +110,7 @@
 	
 	
 	ldi initiator,0xCF ;setting adsc to 1...now the convertion has been started
+	sts ADCSRA,initiator
 	;the job now is done...waiting for the completion interrupt to happen...nothing we can do
 	reti
     
@@ -116,9 +119,19 @@
 
     ADC_ready:
 	rcall lcd_clear_display
+	sei
+	lds r30 , ADCL
+	lds r31 , ADCH
 	
-	lds r31,ADCH
-	lds r30,ADCL
+	
+	rcall lcd_clear_display
+	
+	
+	
+	
+	
+	mov r17,r31
+	mov r18,r30
 	
 	lsl r30
 	rol r31 
@@ -126,34 +139,80 @@
 	lsl r30
 	rol r31 
 	
-	add r30,r30
-	adc r31,r31 ;*5 
+	add r30,r18
+	adc r31,r17 ;*5 
 	
 	
 	;/1024
 	;Vin = 5*adc/2^10
-	clr div1
-	rcall helper
+	;mov r24,r30
+	;add r24,r29
+	;rcall lcd_data
 	
+	ldi div1,0
+	rcall helper_div
 	mov r24,div1
+	add r24,r29
 	rcall lcd_data
+
 	
 	ldi r24,'.'
 	rcall lcd_data
 	
       
 	
-	mul r31,r27 ;multiplying to get first decimal
-	clr div1
-	rcall helper
-	mov r24,div1
-	rcall lcd_data
+	
+	;multiplying to get first decimal
+	mov r17,r31
+	mov r18,r30
+	
+	lsl r30
+	rol r31
+	lsl r30
+	rol r31
+	lsl r30
+	rol r31
 	
 	
-	mul r31,r27;second_decimal
+	add r30,r18
+	adc r31,r17
+	
+	add r30,r18
+	adc r31,r17
+	
+	
 	clr div1
 	rcall helper_div
 	mov r24,div1
+	add r24,r29
+	rcall lcd_data
+	
+	
+	mov r17,r31
+	mov r18,r30
+	
+	lsl r30
+	rol r31
+	lsl r30
+	rol r31
+	lsl r30
+	rol r31
+	
+	
+	
+	add r30,r18
+	adc r31,r17
+	
+	add r30,r18
+	adc r31,r17
+	
+	
+	
+	
+	clr div1
+	rcall helper_div
+	mov r24,div1
+	add r24,r29
 	rcall lcd_data
 	
 	
@@ -163,10 +222,11 @@
 	reti
 	
     helper_div:
-    subi r31,0x04
     cpi r31,0x04; -1024
     brlo helper_done
+    subi r31,0x04
     inc div1
+    rjmp helper_div
     
     helper_done:
 	ret
