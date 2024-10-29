@@ -1,0 +1,243 @@
+#define F_CPU 16000000UL  // 16 MHz
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#define SENSITIVITY 0.0129    // Sensitivity in A/ppm
+#define VREF 5.0                // Reference voltage in Volts
+#define Vgas0 0.1               // Vgas0 in Volts
+#define CO_threshold 70         // Threshold in ppm
+
+
+volatile float V_in = 0.0;
+volatile int CO_ppm = 0;
+volatile uint8_t leds;
+volatile bool gas_detected = false;
+
+
+
+void ADC_init() // Must add the interrupts
+{
+    /* Chose ADC channe2 (ADC2) to read from POT3, ends in ...0010
+     * For voltage reference selection: REFS0 = 1, REFS1 = 0 
+     * Right adjustment: ADLAR = 0
+     * ADC0: MUX3 = 0, MUX2 = 0, MUX1 = 1, MUX0 = 0
+     */
+    ADMUX = (1 << REFS0) | (1 << MUX1);
+    // Same as the above ADMUX = 0b01000010;
+    
+    /* Enable ADC: ADEN = 1
+     * No conversion from analog to digital YET: ADSC = 0
+     * Enable ADC interrupt: ADIE = 1 
+     
+     * Prescaler: f_ADC = 16MHz / prescaler and
+     * 50kHz <= f_ADC <= 200kHz for 10-bits accuracy. So,
+     * division factor = 128 -> gives f_ADC = 125kHz -> may NOT be needed here
+    */ 
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); 
+    // Same as the above ADCSRA = 0b10000111;
+    
+    // Only using ADC2, so for less power consumption set ADCi to disable their 
+    // digital input that we don't use 
+    //DIDR0 = (1 << ADC2D); // Only disable digital input on ADC2
+}
+
+// Cx -> CO concentration
+uint8_t open_LEDs(int Cx)
+{
+    if (Cx < 10) return 0x00;     // if Cx < 10ppm, open none
+    if (Cx < 30) return 0x01;     // if Cx < 30ppm, open PB0
+    if (Cx < 50) return 0x03;     // if Cx < 50ppm, open PB0-PB1
+    if (Cx < 60) return 0x07;     // if Cx < 60ppm, open PB0-PB2
+    if (Cx < 70) return 0x0F;     // if Cx < 70ppm, open PB0-PB3
+    if (Cx < 140) return 0x1F;    // if Cx < 100ppm, open PB0-PB4
+    return 0x3F;                  // if Cx >= 1000ppm, open PB0-PB5  
+}
+
+int calc_CO_concentration(uint16_t ADC_value)
+{
+    /* V_in: (normalized) voltage from analog input A2 of microprocessor
+     * ADC_value: value (10-bits = 1024) that ADC conversion gets
+     * VREF: voltage reference by default 
+     */
+    V_in = (ADC_value * VREF) / 1024.0;             // float
+    
+    /* The target gas concentration CO_ppm is calculated by the following 
+     * method (from the link provided page 3) 
+     */
+    CO_ppm = (int)((V_in - Vgas0) / SENSITIVITY);   // convert float to int
+    
+    return CO_ppm;
+}
+
+
+void write_2_nibbles(uint8_t lcd_data) {
+    uint8_t temp;
+
+    // Send the high nibble
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PORTD = temp;                              // Output the high nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
+
+    // Send the low nibble
+    lcd_data <<= 4;                            // Move low nibble to high nibble position
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PORTD = temp;                              // Output the low nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
+}
+
+void lcd_data(uint8_t data)
+{
+    PORTD |= 0x04;              // LCD_RS = 1, (PD2 = 1) -> For Data
+    write_2_nibbles(data);      // Send data
+    _delay_ms(250);             // Wait 250 msec
+    return;
+}
+
+void lcd_command(uint8_t data)
+{
+    PORTD &= 0xFB;              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    write_2_nibbles(data);      // Send data
+    _delay_ms(250);             // Wait 250 msec
+    return;
+}
+
+void lcd_clear_display()
+{
+    uint8_t clear_disp = 0x01;  // Clear display command
+    lcd_command(clear_disp);    
+    _delay_ms(5);               // Wait 5 msec
+    return;
+}
+
+void lcd_init() {
+    _delay_ms(200);
+
+    // Send 0x30 command to set 8-bit mode (three times)
+    PORTD = 0x30;              // Set command to switch to 8-bit mode
+    PORTD |= (1 << PD3);       // Enable pulse
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);      // Clear enable
+    _delay_us(30);            // Wait 250 µs
+
+    PORTD = 0x30;              // Repeat command to ensure mode set
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    PORTD = 0x30;              // Repeat once more
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    // Send 0x20 command to switch to 4-bit mode
+    PORTD = 0x20;
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    // Set 4-bit mode, 2 lines, 5x8 dots
+    lcd_command(0x28);
+
+    // Display ON, Cursor OFF
+    lcd_command(0x0C);
+
+    // Clear display
+    lcd_clear_display();
+
+    // Entry mode: Increment cursor, no display shift
+    lcd_command(0x06);
+}
+
+void clear_gas()
+{
+    lcd_clear_display();
+    lcd_data('C');
+    lcd_data('L');
+    lcd_data('E');
+    lcd_data('A');
+    lcd_data('R');
+    lcd_clear_display();
+    return;
+}
+
+void detected_gas()
+{
+    lcd_clear_display();
+    lcd_data('G');
+    lcd_data('A');
+    lcd_data('S');
+    lcd_data(' ');
+    lcd_data('D');
+    lcd_data('E');
+    lcd_data('T');
+    lcd_data('E');
+    lcd_data('C');
+    lcd_data('T');
+    lcd_data('E');
+    lcd_data('D');
+    lcd_clear_display();
+    return;
+}
+
+// Read the DC voltage from POT3 analog filter, and take the digital result
+uint16_t ADC_conversion()
+{
+    ADCSRA |= (1 << ADSC);          // Start conversion from analog to digital
+    while(ADCSRA & (1 << ADSC));    // Wait for conversion to end
+    return ADC;                     // Return the value, (ADCH:ADCL)
+}
+
+int main ()
+{
+    DDRB = 0x3F;                        // Initialize (set) PB0-PB5 as output
+    DDRD = 0xFF;
+    DDRC = 0x00;
+        
+    ADC_init();                         // Initialize ADC
+    
+    lcd_init();
+    _delay_ms(100);
+    lcd_clear_display();
+    
+    sei();                              // Enable global interrupts
+    
+       
+    while(1)
+    {
+        uint16_t value = ADC_conversion();
+        CO_ppm = calc_CO_concentration(value);  // Calculate CO concentration
+              
+        if (CO_ppm > 70) // Blink necessary leds until CO_ppm drops down to 70ppm or less    {
+        {
+            gas_detected = true;
+            leds = open_LEDs(CO_ppm);           // Indicate which leds should be on
+            if(PORTB == leds)
+            {       
+                PORTB = 0x00;                   // If open leds found, close them
+                _delay_ms(50);
+            }
+            PORTB = leds;                       // Re-open leds 
+            _delay_ms(50);
+            detected_gas();
+        }
+        else if (CO_ppm <= 70)  // Just open necessary leds
+        {
+            gas_detected = false;
+            leds = open_LEDs(CO_ppm);               // Indicate which leds should be on
+            PORTB = leds;       // Steady led display without blinking
+            clear_gas();
+            _delay_ms(100);
+        }
+    }
+}
