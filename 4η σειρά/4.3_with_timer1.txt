@@ -46,13 +46,13 @@ void ADC_init() // Must add the interrupts
 // Cx -> CO concentration
 uint8_t open_LEDs(int Cx)
 {
-    if (Cx < 10) return 0x00;     // if Cx < 10ppm, open none
-    if (Cx < 30) return 0x01;     // if Cx < 30ppm, open PB0
-    if (Cx < 70) return 0x03;     // if Cx < 70ppm, open PB0-PB1 -> GAS DETECTED
-    if (Cx < 170) return 0x07;    // if Cx < 170ppm, open PB0-PB2
-    if (Cx < 270) return 0x0F;    // if Cx < 270ppm, open PB0-PB3
-    if (Cx < 370) return 0x1F;    // if Cx < 370ppm, open PB0-PB4
-    return 0x3F;                  // if Cx >= 370ppm, open PB0-PB5  
+    if (Cx <= 10) return 0x00;     // if Cx <= 10ppm, open none
+    if (Cx <= 30) return 0x01;     // if Cx <= 30ppm, open PB0
+    if (Cx <= 70) return 0x03;     // if Cx <= 70ppm, open PB0-PB1 
+    if (Cx <= 170) return 0x07;    // if Cx <= 170ppm, open PB0-PB2 -> GAS DETECTED
+    if (Cx <= 270) return 0x0F;    // if Cx <= 270ppm, open PB0-PB3
+    if (Cx <= 370) return 0x1F;    // if Cx <= 370ppm, open PB0-PB4
+    return 0x3F;                   // if Cx > 370ppm, open PB0-PB5  
 }
 
 int calc_CO_concentration()
@@ -89,7 +89,7 @@ ISR(ADC_vect)
 {   
     CO_ppm = calc_CO_concentration();// Calculate CO concentration
      
-    if (CO_ppm > 70) // Blink necessary leds until CO_ppm drops down to 70ppm or less    
+    if (CO_ppm > CO_threshold) // Blink necessary leds until CO_ppm drops down to 70ppm or less    
     {
         if(gas_detected)                // If already gas detected
         {
@@ -98,15 +98,15 @@ ISR(ADC_vect)
             if(PORTB == leds)
             {
                 PORTB = 0x00;
-                _delay_ms(30);
+                _delay_ms(50);
                 PORTB = leds;
             }
             else 
             {
                 PORTB = leds;
-                _delay_ms(30);
+                _delay_ms(50);
                 PORTB = 0x00;
-                _delay_ms(30);
+                _delay_ms(50);
                 PORTB = leds;
             }
         }
@@ -118,7 +118,7 @@ ISR(ADC_vect)
             detected_gas();              // Display 'GAS DETECTED'
         }
     }
-    else if (CO_ppm <= 70) // Just open necessary leds
+    else if (CO_ppm <= CO_threshold) // Just open necessary leds
     {
         
         leds = open_LEDs(CO_ppm);    // Indicate which leds should be on 
