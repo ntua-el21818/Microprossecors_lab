@@ -119,13 +119,15 @@
 
     ADC_ready:
 	rcall lcd_clear_display
+	
 	sei
+	
+
 	lds r30 , ADCL
 	lds r31 , ADCH
 	
 	
-	rcall lcd_clear_display
-	
+		
 	
 	
 	
