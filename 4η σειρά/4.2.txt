@@ -33,14 +33,14 @@ void lcd_data(uint8_t data)
 {
     PORTD |= 0x04;              // LCD_RS = 1, (PD2 = 1) -> For Data
     write_2_nibbles(data);      // Send data
-    _delay_ms(250);             // Wait 250 msec
+    _delay_ms(5);            
     return;
 }
 void lcd_command(uint8_t data)
 {
     PORTD &= 0xFB;              // LCD_RS = 0, (PD2 = 0) -> For Instruction
     write_2_nibbles(data);      // Send data
-    _delay_ms(250);             // Wait 250 msec
+    _delay_ms(5);             
     return;
 }
 
