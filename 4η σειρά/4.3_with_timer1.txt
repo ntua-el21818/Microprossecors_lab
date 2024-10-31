@@ -48,11 +48,11 @@ uint8_t open_LEDs(int Cx)
 {
     if (Cx < 10) return 0x00;     // if Cx < 10ppm, open none
     if (Cx < 30) return 0x01;     // if Cx < 30ppm, open PB0
-    if (Cx < 50) return 0x03;     // if Cx < 50ppm, open PB0-PB1
-    if (Cx < 60) return 0x07;     // if Cx < 60ppm, open PB0-PB2
-    if (Cx < 70) return 0x0F;     // if Cx < 70ppm, open PB0-PB3
-    if (Cx < 140) return 0x1F;    // if Cx < 100ppm, open PB0-PB4
-    return 0x3F;                  // if Cx >= 1000ppm, open PB0-PB5  
+    if (Cx < 70) return 0x03;     // if Cx < 70ppm, open PB0-PB1 -> GAS DETECTED
+    if (Cx < 170) return 0x07;    // if Cx < 170ppm, open PB0-PB2
+    if (Cx < 270) return 0x0F;    // if Cx < 270ppm, open PB0-PB3
+    if (Cx < 370) return 0x1F;    // if Cx < 370ppm, open PB0-PB4
+    return 0x3F;                  // if Cx >= 370ppm, open PB0-PB5  
 }
 
 int calc_CO_concentration()
@@ -86,17 +86,37 @@ ISR(TIMER1_OVF_vect)
 
 // Interrupt routine for ADC
 ISR(ADC_vect)
-{
+{   
     CO_ppm = calc_CO_concentration();// Calculate CO concentration
      
     if (CO_ppm > 70) // Blink necessary leds until CO_ppm drops down to 70ppm or less    
     {
-        gas_detected = true;
-        leds = open_LEDs(CO_ppm);    // Indicate which leds should be on 
-        
-        PORTB = leds;                // Leds blinking  
-                
-        detected_gas();              // Display 'GAS DETECTED'
+        if(gas_detected)                // If already gas detected
+        {
+            leds = open_LEDs(CO_ppm);   // Indicate which leds should be on 
+            
+            if(PORTB == leds)
+            {
+                PORTB = 0x00;
+                _delay_ms(30);
+                PORTB = leds;
+            }
+            else 
+            {
+                PORTB = leds;
+                _delay_ms(30);
+                PORTB = 0x00;
+                _delay_ms(30);
+                PORTB = leds;
+            }
+        }
+        else                            // If first time gas detection 
+        {
+            gas_detected = true;
+            leds = open_LEDs(CO_ppm);   // Indicate which leds should be on 
+            PORTB = leds;
+            detected_gas();              // Display 'GAS DETECTED'
+        }
     }
     else if (CO_ppm <= 70) // Just open necessary leds
     {
@@ -136,7 +156,7 @@ void lcd_data(uint8_t data)
 {
     PORTD |= 0x04;              // LCD_RS = 1, (PD2 = 1) -> For Data
     write_2_nibbles(data);      // Send data
-    _delay_ms(250);             // Wait 250 msec
+    _delay_ms(5);               // Wait 5 msec
     return;
 }
 
@@ -144,7 +164,7 @@ void lcd_command(uint8_t data)
 {
     PORTD &= 0xFB;              // LCD_RS = 0, (PD2 = 0) -> For Instruction
     write_2_nibbles(data);      // Send data
-    _delay_ms(250);             // Wait 250 msec
+    _delay_ms(5);               // Wait 5 msec
     return;
 }
 
@@ -164,26 +184,26 @@ void lcd_init() {
     PORTD |= (1 << PD3);       // Enable pulse
     _delay_us(1);
     PORTD &= ~(1 << PD3);      // Clear enable
-    _delay_us(30);            // Wait 250 µs
+    _delay_us(250);            // Wait 250 µsec
 
     PORTD = 0x30;              // Repeat command to ensure mode set
     PORTD |= (1 << PD3);
     _delay_us(1);
     PORTD &= ~(1 << PD3);
-    _delay_us(30);
+    _delay_us(250);
 
     PORTD = 0x30;              // Repeat once more
     PORTD |= (1 << PD3);
     _delay_us(1);
     PORTD &= ~(1 << PD3);
-    _delay_us(30);
+    _delay_us(250);
 
     // Send 0x20 command to switch to 4-bit mode
     PORTD = 0x20;
     PORTD |= (1 << PD3);
     _delay_us(1);
     PORTD &= ~(1 << PD3);
-    _delay_us(30);
+    _delay_ms(5);
 
     // Set 4-bit mode, 2 lines, 5x8 dots
     lcd_command(0x28);
@@ -200,19 +220,19 @@ void lcd_init() {
 
 void clear_gas()
 {
-    lcd_clear_display();
+    lcd_clear_display();    // Clear display before new output
     lcd_data('C');
     lcd_data('L');
     lcd_data('E');
     lcd_data('A');
     lcd_data('R');
-    lcd_clear_display();
+    //lcd_clear_display();
     return;
 }
 
 void detected_gas()
 {
-    lcd_clear_display();
+    lcd_clear_display();    // Clear display before new output
     lcd_data('G');
     lcd_data('A');
     lcd_data('S');
@@ -225,7 +245,7 @@ void detected_gas()
     lcd_data('T');
     lcd_data('E');
     lcd_data('D');
-    lcd_clear_display();
+    //lcd_clear_display();
     return;
 }
 
