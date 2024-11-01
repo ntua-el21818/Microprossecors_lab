@@ -124,10 +124,10 @@ ISR(ADC_vect)
         leds = open_LEDs(CO_ppm);    // Indicate which leds should be on 
         PORTB = leds;                // Steady led display without blinking
         
-        if(gas_detected)             // If we have detected gas, clear screen and display 'CLEAR'
-        {
+                   // If we have detected gas, clear screen and display 'CLEAR'
+        
             clear_gas();             // Display 'CLEAR' 
-        }
+        
         gas_detected = false;
     }
 }
@@ -255,7 +255,15 @@ int main ()
     DDRD = 0xFF;                        // LCD
     DDRC = 0x00;                        // ADC
     
-    ADC_init();                         // Initialize ADC
+    ADC_init();      // Initialize ADC
+     
+    
+    lcd_init();
+    _delay_ms(100);
+    lcd_clear_display();
+ 
+    
+    
     
     TIMSK1 = (1 << TOIE1);              // Enable interrupts of TCNT1 (overflow)
     TCCR1B = (1 << CS10) | (1 << CS12); // Frequency of Timer1 16MHz/1024
@@ -270,13 +278,10 @@ int main ()
                                          * That means that when 1563 cycles pass
                                          * there will occur overflow that will trigger interrupt.
                                          */
-    lcd_init();
-    _delay_ms(100);
-    lcd_clear_display();
-    
+
     sei();                              // Enable global interrupts
     
-       
+      
     while(1)
     {
         sei();
