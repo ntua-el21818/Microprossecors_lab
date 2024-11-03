@@ -1,0 +1,45 @@
+#define F_CPU 16000000UL  // 16 MHz
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+
+
+
+int main(){
+
+    DDRB = 0x0F; //pb0-pb3 is input
+    int F0,F1;
+    
+    
+    
+    DDRD = 0x00; //output
+    
+    
+    
+    
+    
+    uint8_t alpha,beta;
+    while(1){
+   
+   //smart mechanism for doing the logic of the excercise
+   alpha = (PORTB&0x07); //ABC
+   beta = (PORTB&0x0A); //BD
+   
+   //check F0
+    if(alpha != 0x06 && beta != 0x08) F0 = 0;
+    else F0 = 1;
+   //check F1   
+    if(alpha>0x00 && beta==0x08) F1 = 1;
+    else F1 = 0;
+    }
+
+
+
+
+
+
+}
