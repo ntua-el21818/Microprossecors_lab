@@ -201,37 +201,28 @@ int main(){
     
     while(1){
    
-   PORTD &= 0x0C; //ordering every pd unrelative to the excercise to remain off for eternity
-   
-   
-   
-   
-   //smart mechanism for doing the logic of the excercise 5.1
-   current = (~PINB)&(0x0F);
-   
-   alpha = (current&0x07); //ABC
-   beta = (current&0x0A); //BD
-   
-   //check F0
-    if(alpha != 0x06 && beta != 0x08) F0 = 0x01;
-    else F0 = 0x00;
-   //check F1   
-    if(alpha>0x00 && beta==0x02) F1 = 0x02;
-    else F1 = 0;
-    
-    
+        PORTD &= 0x0C; //ordering every pd unrelative to the excercise to remain off for eternity
 
-    
-    
-     //the f0 f1 are now calculated and now its the time to be pushed with twi to IO0_0 ans IO0_1  
-    result = F0 | F1;
-   
-    PCA9555_0_write(REG_OUTPUT_0, result);
-    
+        //smart mechanism for doing the logic of the excercise 5.1
+        current = (~PINB)&(0x0F);
+
+        alpha = (current&0x07); //ABC
+        beta = (current&0x0A); //BD
+
+        //check F0
+        if(alpha != 0x06 && beta != 0x08) F0 = 0x01;
+        else F0 = 0x00;
+        //check F1   
+        if(alpha>0x00 && beta==0x02) F1 = 0x02;
+        else F1 = 0;
+
+
+
+
+
+        //the f0 f1 are now calculated and now its the time to be pushed with twi to IO0_0 ans IO0_1  
+        result = F0 | F1;
+
+        PCA9555_0_write(REG_OUTPUT_0, result);
     }
-   
-
-
-
-
 }
