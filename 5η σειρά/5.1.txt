@@ -185,18 +185,20 @@ int main(){
     DDRC = 0xFF; //is used by the twi -> pc4 pc5
     
     
-    DDRB = 0x0F; //pb0-pb3 is input
+    DDRB = 0xF0; //pb0-pb3 is input
+    
     int F0,F1;
     
     
     
-    DDRD = 0x00; //output
+    DDRD = 0xFF; //output
     
     twi_init();
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); //IO_0 AND I0_1 is set to output
     
     
+    uint8_t alpha,beta,current,result;
     
-    uint8_t alpha,beta;
     while(1){
    
    PORTD &= 0x0C; //ordering every pd unrelative to the excercise to remain off for eternity
@@ -205,24 +207,28 @@ int main(){
    
    
    //smart mechanism for doing the logic of the excercise 5.1
-   alpha = (PORTB&0x07); //ABC
-   beta = (PORTB&0x0A); //BD
+   current = (~PINB)&(0x0F);
+   
+   alpha = (current&0x07); //ABC
+   beta = (current&0x0A); //BD
    
    //check F0
-    if(alpha != 0x06 && beta != 0x08) F0 = 0x00;
-    else F0 = 1;//0x04
+    if(alpha != 0x06 && beta != 0x08) F0 = 0x01;
+    else F0 = 0x00;
    //check F1   
-    if(alpha>0x00 && beta==0x08) F1 = 1;//0x08
+    if(alpha>0x00 && beta==0x02) F1 = 0x02;
     else F1 = 0;
-    }
     
     
+
     
     
      //the f0 f1 are now calculated and now its the time to be pushed with twi to IO0_0 ans IO0_1  
-    PCA9555_0_write(REG_INPUT_0,alpha);
-    PCA9555_0_write(REG_INPUT_1,beta);
+    result = F0 | F1;
+   
+    PCA9555_0_write(REG_OUTPUT_0, result);
     
+    }
    
 
 
