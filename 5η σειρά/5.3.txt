@@ -1,12 +1,10 @@
-#define F_CPU 16000000UL  // 16 MHz
+#define F_CPU 16000000UL
 
-#include <avr/io.h>
-#include <util/delay.h>
-#include <avr/interrupt.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include<avr/io.h>
+#include<avr/interrupt.h>
+#include<util/delay.h>
 
-#define PCA9555_0_ADDRESS 0x40      // A0=A1=A2=0 by hardware
+#define PCA9555_0_ADDRESS 0x40      //A0=A1=A2=0 by hardware
 #define TWI_READ 1                  // reading from twi device
 #define TWI_WRITE 0                 // writing to twi device
 #define SCL_CLOCK 100000L           // twi clock in Hz
@@ -50,7 +48,7 @@ void twi_init(void)
     TWBR0 = TWBR0_VALUE;    // SCL_CLOCK 100KHz
 }
 
-// Read one byte from the twi device (request more data from device)
+// Read one byte from the twi device ( request more data from device)
 unsigned char twi_readAck(void)
 {
     TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWEA);
@@ -89,7 +87,7 @@ unsigned char twi_start(unsigned char address)
 void twi_start_wait(unsigned char address)
 {
     uint8_t twi_status;
-    while (1)
+    while ( 1 )
     {
         // send START condition
         TWCR0 = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
@@ -110,7 +108,7 @@ void twi_start_wait(unsigned char address)
         
         // check value of TWI Status Register.
         twi_status = TW_STATUS & 0xF8;
-        if ((twi_status == TW_MT_SLA_NACK )||(twi_status ==TW_MR_DATA_NACK))
+        if ( (twi_status == TW_MT_SLA_NACK )||(twi_status ==TW_MR_DATA_NACK) )
         {
             /* device busy, send stop condition to terminate write operation */
             TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
@@ -142,7 +140,7 @@ unsigned char twi_write(unsigned char data)
 // 1 failed to access device
 unsigned char twi_rep_start(unsigned char address)
 {
-    return twi_start(address); // Restarts communication with the given address
+    return twi_start(address);
 }
 
 // Terminates the data transfer and releases the twi bus
@@ -154,7 +152,6 @@ void twi_stop(void)
     while(TWCR0 & (1<<TWSTO));
 }
 
-// Reads a byte without acknowledgment (usually the last byte)
 unsigned char twi_readNak(void)
 {
     TWCR0 = (1<<TWINT) | (1<<TWEN);
@@ -163,119 +160,168 @@ unsigned char twi_readNak(void)
     return TWDR0;
 }
 
-// Writes a value to a specified register in the PCA9555
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value)
 {
     twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
-    twi_write(reg);     // reg determines where the data will be stored
-    twi_write(value);   // The data to be written
-    twi_stop();         // Ending communication with the PCA9555
+    twi_write(reg);
+    twi_write(value);
+    twi_stop();
 }
 
-// Reads a value from a specified PCA9555 register
-// This function needs to switch between write and read modes to set up register address
 uint8_t PCA9555_0_read(PCA9555_REGISTERS reg)
 {
     uint8_t ret_val;
     
-    // Begin the communication with the PCA9555_0_ADDRESS
-    // This initial write operation is necessary to set the internal register 
-    // pointer to the target register from which we want to read
     twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
-    twi_write(reg); // This tells the device which register will be read next
-    
-    // Now we call the function being in read mode
-    // This sends a repeated START condition, which allows the microcontroller 
-    // to read from the previously addressed device without releasing the bus.
+    twi_write(reg);
     twi_rep_start(PCA9555_0_ADDRESS + TWI_READ);
+    ret_val = twi_readNak();
+    twi_stop();
     
-    // Read one byte of data from the PCA9555, which is the content of the register we selected earlier
-    ret_val = twi_readNak(); // It sends NAK indicating to PCA9555 that this is the final byte we wanna read
-    twi_stop(); // Ending the communication and releasing the bus
-    
-    return ret_val; // Returns the value stored in the predifined register of PCA9555
-} 
+    return ret_val;
+}
 
-#define LCD_CLEAR 0x01          // Clear display
-#define LCD_DISPLAY_ON 0x0C     // Display ON/OFF control
-#define MODE_8_BIT_INIT 0x03
-#define MODE_4_BIT_SWITCH 0x20
-#define INCREMENT_CURSOR 0x06
+void write_2_nibbles(uint8_t lcd_data) {
+    uint8_t temp;
 
-void send_lcd_data(uint8_t data)
+    // Send the high nibble
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the high nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+
+    // Send the low nibble
+    lcd_data <<= 4;                            // Move low nibble to high nibble position
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the low nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0 , PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+}
+
+void lcd_data(uint8_t data)
 {
-    // Send the upper nibble (4 bits)
-    PCA9555_0_write(REG_OUTPUT_0, (data & 0xF0) | 0x05); // RS=1, RW=0, E=1
-    _delay_us(1);  // Enable pulse width
-    PCA9555_0_write(REG_OUTPUT_0, (data & 0xF0));        // E=0
-    _delay_us(200);
-
-    // Send the lower nibble (4 bits)
-    PCA9555_0_write(REG_OUTPUT_0, ((data << 4) & 0xF0) | 0x05); // RS=1, RW=0, E=1
-    _delay_us(1);  // Enable pulse width
-    PCA9555_0_write(REG_OUTPUT_0, ((data << 4) & 0xF0));        // E=0
-    _delay_ms(2);  // Data hold time
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | 0x04);              // LCD_RS = 1, (PD2 = 1) -> For Data
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);            
+    return;
+}
+void lcd_command(uint8_t data)
+{
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & 0xFB);              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);             
     return;
 }
 
-void send_lcd_command(uint8_t cmd)
+void lcd_clear_display()
 {
-    // Send the upper nibble (4 bits)
-    // This bitwise OR operation is used to set the E (Enable) line high, 
-    // while RS (Register Select) is low and RW (Read/Write) is low
-    PCA9555_0_write(REG_OUTPUT_0, (cmd & 0xF0) | 0x04); // RS=0, RW=0, E=1
-    _delay_us(1);  // Enable pulse width
-    PCA9555_0_write(REG_OUTPUT_0, (cmd & 0xF0));        // E=0
-    _delay_us(200);
-
-    // Send the lower nibble (4 bits)
-    PCA9555_0_write(REG_OUTPUT_0, ((cmd << 4) & 0xF0) | 0x04); // RS=0, RW=0, E=1
-    _delay_us(1);  // Enable pulse width
-    PCA9555_0_write(REG_OUTPUT_0, ((cmd << 4) & 0xF0));        // E=0
-    _delay_ms(2);  // Command execution time
+    uint8_t clear_disp = 0x01;  // Clear display command
+    lcd_command(clear_disp);    
+    _delay_ms(5);               // Wait 5 msec
     return;
 }
-
 void lcd_init() {
     _delay_ms(200);
 
     // Send 0x30 command to set 8-bit mode (three times)
-    for (int i = 0; i < 3; i++)
-    {
-        send_lcd_command(MODE_8_BIT_INIT);
-        _delay_ms(5);
-    }
-    
+    PCA9555_0_write(REG_OUTPUT_0,0x30);              // Set command to switch to 8-bit mode
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));       // Enable pulse
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));      // Clear enable
+    _delay_us(30);            // Wait 250 Âµs
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);            // Repeat command to ensure mode set
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));  
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);             // Repeat once more
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
     // Send 0x20 command to switch to 4-bit mode
-    send_lcd_command(MODE_4_BIT_SWITCH);
-    
+    PCA9555_0_write(REG_OUTPUT_0,0x20); 
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
     // Set 4-bit mode, 2 lines, 5x8 dots
-    send_lcd_command(0x28);
+    lcd_command(0x28);
 
     // Display ON, Cursor OFF
-    send_lcd_command(LCD_DISPLAY_ON);
+    lcd_command(0x0C);
 
     // Clear display
-    send_lcd_command(LCD_CLEAR);     
+    lcd_clear_display();
 
     // Entry mode: Increment cursor, no display shift
-    send_lcd_command(INCREMENT_CURSOR);
+    lcd_command(0x06);
 }
 
-void lcd_PrintString(const char* str)
-{
-    while(*str)
-    {
-        send_lcd_data(*str++);
+
+
+
+int main(){
+    DDRB = 0xff;
+    DDRC = 0xff;
+    DDRD = 0xff;
+   
+    twi_init();
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
+    lcd_init();
+    
+    while (1){
+        lcd_clear_display();
+        lcd_command(0x80);
+        
+        lcd_data('N');
+        lcd_data('I');
+        lcd_data('K');
+        lcd_data('O');
+        lcd_data('L');
+        lcd_data('A');
+        lcd_data('O');
+        lcd_data('S');
+        
+        lcd_command(0xC0);
+        lcd_data('A');
+        lcd_data('N');
+        lcd_data('A');
+        lcd_data('G');
+        lcd_data('N');
+        lcd_data('O');
+        lcd_data('S');
+        lcd_data('T');
+        lcd_data('O');
+        lcd_data('U');
+        _delay_ms(2000);
+        lcd_clear_display();
+        
+        lcd_command(0x80);
+        lcd_data('N');
+        lcd_data('I');
+        lcd_data('K');
+        lcd_data('O');
+        lcd_data('L');
+        lcd_data('A');
+        lcd_data('O');
+        lcd_data('S');
+       
+        lcd_command(0xC0);
+        lcd_data('L');
+        lcd_data('A');
+        lcd_data('P');
+        lcd_data('P');
+        lcd_data('A');
+        lcd_data('S');
+        _delay_ms(2000);
+        
     }
-}
 
-int main ()
-{
-    twi_init();     // Initialize TWI
-    lcd_init();     // Initialize LCD
-    
-    lcd_PrintString("MY NAME IS");
-    
-    while(1){}
 }
