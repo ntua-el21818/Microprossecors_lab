@@ -10,7 +10,7 @@
 #define SCL_CLOCK 100000L           // twi clock in Hz
 
 //Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
-#define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
+#define TWBR0_VALUE (((F_CPU/SCL_CLOCK)-16)/2)
 
 // PCA9555 REGISTERS
 typedef enum {
@@ -185,7 +185,7 @@ int main(void)
 {
     twi_init();
     
-    DDRB = 0x00;	                                // Initialize PORTB as input
+    //DDRB = 0x00;	                                // Initialize PORTB as input
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00);     // Set EXT_PORT 0 as output (we care about IO0_0-IO0_3)
     PCA9555_0_write(REG_CONFIGURATION_1, 0xFE);     // Set IO1_0 as output and the rest as input (set)
     
@@ -196,9 +196,9 @@ int main(void)
         
         uint8_t input = PCA9555_0_read(REG_INPUT_1); // Read input 
 
-        if (input == 0b11101110) PCA9555_0_write(REG_OUTPUT_0, 0x10);         // Pressed '*'
-        else if (input == 0b11011110) PCA9555_0_write(REG_OUTPUT_0, 0x20);    // Pressed '0'
-        else if (input == 0b10111110) PCA9555_0_write(REG_OUTPUT_0, 0x40);    // Pressed '#'
-        else if (input == 0b01111110) PCA9555_0_write(REG_OUTPUT_0, 0x80);    // Pressed 'D'
+        if (input == 0b11101110) PCA9555_0_write(REG_OUTPUT_0, 0x01);         // Pressed '*'
+        else if (input == 0b11011110) PCA9555_0_write(REG_OUTPUT_0, 0x02);    // Pressed '0'
+        else if (input == 0b10111110) PCA9555_0_write(REG_OUTPUT_0, 0x04);    // Pressed '#'
+        else if (input == 0b01111110) PCA9555_0_write(REG_OUTPUT_0, 0x08);    // Pressed 'D'
     }
 }
