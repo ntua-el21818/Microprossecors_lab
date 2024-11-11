@@ -234,9 +234,12 @@ int main(void)
                 temp = temperature % 10 + '0'; 
                 lcd_data(temp);
                 lcd_data('.');
-                temp = (temperature * 10) % 10; // Get the .x
+                temp = (temperature * 10) % 10 + '0'; // Get the .x
                 lcd_data(temp);
             }
+            // If we want to add Celsius in the display
+            lcd_data(' ');
+            lcd_data('C');
             continue;
         }
     }
