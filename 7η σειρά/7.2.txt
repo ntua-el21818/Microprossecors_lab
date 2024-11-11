@@ -1,0 +1,244 @@
+#define F_CPU 16000000UL
+
+#include<avr/io.h>
+#include<avr/interrupt.h>
+#include<util/delay.h>
+#include<stdbool.h>
+
+
+void write_2_nibbles(uint8_t lcd_data) {
+    uint8_t temp;
+
+    // Send the high nibble
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PORTD = temp;                              // Output the high nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
+
+    // Send the low nibble
+    lcd_data <<= 4;                            // Move low nibble to high nibble position
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PORTD = temp;                              // Output the low nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
+}
+
+void lcd_data(uint8_t data)
+{
+    PORTD |= 0x04;              // LCD_RS = 1, (PD2 = 1) -> For Data
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);            
+    return;
+}
+void lcd_command(uint8_t data)
+{
+    PORTD &= 0xFB;              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);             
+    return;
+}
+
+void lcd_clear_display()
+{
+    uint8_t clear_disp = 0x01;  // Clear display command
+    lcd_command(clear_disp);    
+    _delay_ms(5);               // Wait 5 msec
+    return;
+}
+void lcd_init() {
+    _delay_ms(200);
+
+    // Send 0x30 command to set 8-bit mode (three times)
+    PORTD = 0x30;              // Set command to switch to 8-bit mode
+    PORTD |= (1 << PD3);       // Enable pulse
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);      // Clear enable
+    _delay_us(30);            // Wait 250 Âµs
+
+    PORTD = 0x30;              // Repeat command to ensure mode set
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    PORTD = 0x30;              // Repeat once more
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    // Send 0x20 command to switch to 4-bit mode
+    PORTD = 0x20;
+    PORTD |= (1 << PD3);
+    _delay_us(1);
+    PORTD &= ~(1 << PD3);
+    _delay_us(30);
+
+    // Set 4-bit mode, 2 lines, 5x8 dots
+    lcd_command(0x28);
+
+    // Display ON, Cursor OFF
+    lcd_command(0x0C);
+
+    // Clear display
+    lcd_clear_display();
+
+    // Entry mode: Increment cursor, no display shift
+    lcd_command(0x06);
+}
+
+
+// Rerurns true if a connected device is found (PD4 = 0)
+bool one_wire_reset()
+{
+    DDRD = 0x10;            // Set PD4 as output
+    PORTD = 0x00;           // Clear PD4
+    _delay_us(480);         // Delay 480 usec
+    
+    DDRD = 0x00;            // Set PD4 as input
+    PORTD = 0x00;           // Disable pull-up resistor
+    _delay_ms(100);         // Delay 100 usec
+    
+    uint8_t input = PIND;   // Read input
+    _delay_us(380);         // Delay 380 usec
+    
+    // If device is detected (PD4 = 0) -> return true
+    if ((input & 0x10) == 0x10) {return false;} // PD4 = 1
+    return true;                                // PD4 = 0
+}
+
+
+uint8_t one_wire_receive_bit()
+{
+    DDRD = 0x10;                        // Set PD4 as output
+    PORTD = 0x00;                       // Clear PD4
+    _delay_us(2);                       // Delay 2 usec 
+    
+    DDRD = 0x00;                        // Set PD4 as input
+    PORTD = 0x00;                       // Disable pull-up resistor
+    _delay_us(10);                      // Delay 10 usec
+    
+    uint8_t bit_to_receive = PIND;      // Read the PD4
+    _delay_us(49);                      // Delay 49 usec
+    
+    // If PD4 is set, return 0x01
+    if ((bit_to_receive & 0x10) == 0x10) {return 0x01;}
+    
+    return 0x00;
+}
+
+void one_wire_transmit_bit(uint8_t bit_to_transmit)
+{
+    DDRD = 0x10;                        // Set PD4 as output
+    PORTD = 0x00;                       // Clear PD4
+    _delay_us(2);                       // Delay 2 usec 
+    
+    PORTD = (bit_to_transmit & 0x10);   // Send PD4 bit to connected device
+    _delay_us(58);                      // Delay 58 usec
+    
+    DDRD = 0x00;                        // Set PD4 as input
+    PORTD = 0x00;                       // Disable pull-up resistor
+    _delay_us(1);                       // Delay 1 usec
+    return;
+}
+
+uint8_t one_wire_receive_byte()
+{
+    uint8_t received_byte = 0x00;       // Store the byte (8-bit) we received
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        uint8_t received_bit = one_wire_receive_bit();
+        received_byte = received_byte >> 1;             // Logical shift right
+        received_byte |= received_bit;                  // Logical OR to insert new bit into byte sequence
+    }
+    return received_byte;
+}
+
+void one_wire_transmit_byte(uint8_t byte_to_transmit)
+{
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        uint8_t send_bit = (byte_to_transmit >> i) & 0x01;// Bit to transmit now in position bit 0
+        one_wire_transmit_bit(send_bit);
+    }
+    return;
+}
+
+int GetTemperature()
+{
+    bool connected_device = one_wire_reset();   // Check for connected device
+    if (!connected_device) return 0x8000;       // Error in connection return 0x8000
+    
+    one_wire_transmit_byte(0xCC);               // Only one device 
+    one_wire_transmit_byte(0x44);               // Begin counting temperature
+    
+    while (one_wire_receive_bit() == 0x01);     // Wait until the above counting terminates
+    
+    one_wire_reset();                           // Re-initialize
+    one_wire_transmit_byte(0xCC);
+    one_wire_transmit_byte(0xBE);               // Read 16-bit result of temperature value
+    
+    uint16_t temperature = 0;
+    temperature |= one_wire_receive_byte();     // 8-bit LSB of the total 16-bit value
+    // Shift the 8-bit value 8 times to the left, OR with the previous 8-bit value
+    // And take the temperature value of 16-bit
+    temperature |= ((uint16_t)one_wire_receive_byte() << 8);  
+    
+    return temperature;
+}
+
+int main(void)
+{
+    lcd_init();
+    
+    DDRD = 0xFF;    // For LCD
+    DDRC = 0x00;            
+    
+    while(1)
+    {
+        lcd_clear_display();
+        
+        uint16_t temperature = GetTemperature();
+        if (temperature == 0x8000) // NO Device 9 bits no need for extra line
+        {
+            lcd_data('N');
+            lcd_data('O');
+            lcd_data(' ');
+            lcd_data('D');
+            lcd_data('e');
+            lcd_data('v');
+            lcd_data('i');
+            lcd_data('c');
+            lcd_data('e');
+        } else {
+            float temperature = ~temperature + 1;
+            
+            float temp = temperature;
+            if (temperature < 0)
+            {
+                lcd_data('-'); // Print '-' for negative values
+            }
+            if (temperature >= 100) // No need for '.' because we already have 3 digits
+            {
+                temp = temperature / 100 + '0'; 
+                lcd_data(temp);
+                temp = temperature / 10 + '0'; 
+                lcd_data(temp);
+                temp = temperature % 10 + '0'; 
+                lcd_data(temp);
+            } else {
+                temp = temperature / 10 + '0'; 
+                lcd_data(temp);
+                temp = temperature % 10 + '0'; 
+                lcd_data(temp);
+                lcd_data('.');
+                temp = (temperature * 10) % 10; // Get the .x
+                lcd_data(temp);
+            }
+            continue;
+        }
+    }
+    return;
+}
