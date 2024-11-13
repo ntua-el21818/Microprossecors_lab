@@ -181,6 +181,31 @@ uint8_t ret_val;
  return ret_val;
 } 
 
+uint8_t check(){
+   
+    uint8_t stili,grammi;  
+    //check which stili is pressed
+   
+    PCA9555_0_write(REG_CONFIGURATION_1, 0xF0);
+    stili = PCA9555_0_read(REG_INPUT_1); 
+    if(stili == 0xF0) return 0xFF;
+    
+    
+     
+    
+    
+    
+    
+    PCA9555_0_write(REG_CONFIGURATION_1, 0x0F);
+    
+    grammi = PCA9555_0_read(REG_INPUT_1);
+    if (grammi == 0x0F) return 0xFF; 
+    
+    return ((grammi|0xF0) & (stili|0x0F)); 
+    
+    
+}
+
 int main(){
     
     uint8_t input = 0x00; 
@@ -195,47 +220,51 @@ int main(){
     
     twi_init();
     
-    PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
-    PCA9555_0_write(REG_CONFIGURATION_1,0xF0); //
-    PCA9555_0_write(REG_OUTPUT_1,0x00); //
+   
+    
+    PCA9555_0_write(REG_OUTPUT_0,0x00);
+    PCA9555_0_write(REG_OUTPUT_1,0x00); 
     
     while(1){
-        //PORTB = ~PORTB;
-        input = PCA9555_0_read(REG_INPUT_1);//
-        //PORTD = input;
-        rejected = false;
+        PORTD = 0x00;
+        input = check(); 
         
-        if (input == 0xF0) continue; 
+        rejected = false;
+        PORTD = input;
+        if (input == 0xFF) continue; 
         
         //first digit
         else{
             
-            
+            PORTD = 0x0F;//recognised first
             savor = input;
             while(1){           //????????????
                 _delay_ms(15);
-                input = PCA9555_0_read(REG_INPUT_1);//positive logic
+                input = check();
+                //PORTD = input;
                 if (input==savor) continue;
                 else  break;
             }
-            if(savor != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
+            //PORTD = savor;
+            if(savor != 0xD7) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
             
             //second - we have to wait even if first digit is wrong
             while(1){
-                input = PCA9555_0_read(REG_INPUT_1);//positive logic
-                if (input == 0xF0) continue; 
+                input = check() ; 
+                if (input == 0xFF) continue; 
                 else{
                     savor = input;
                     while(1){           //????????????
                         _delay_ms(15);
-                         input = PCA9555_0_read(REG_INPUT_1);//positive logic
+                        //PORTD = input; 
+                        input = check();
                         if (input==savor) continue;
                         else  break;
                              }
                     
                     
-                    
-                    if (savor!= 0xB0) rejected = true; //checks if second digit is different from correct 3
+                    //PORTD = savor;
+                    if (savor!= 0xB7) rejected = true; //checks if second digit is different from correct 3
                     
                     break;
                       
@@ -244,7 +273,7 @@ int main(){
             
             
         }
-    
+        PORTD = 0xFF;//2 digits pressed    
         if(rejected == true) {
             for(int i = 0 ; i<=4; i++){
                 PORTB = 0x3F;
