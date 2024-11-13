@@ -296,8 +296,8 @@ int main(void)
         uint8_t input = keypad_to_ascii();           // Read input 
 
         if (input == 0b01110111) PORTB = 0x01;       // Pressed 'A'
-        else if (input == 0b10111011) PORTB = 0X02;  // Pressed '8'
-        else if (input == 0b11011101) PORTB = 0x04;  // Pressed '6'
+        else if (input == 0b10111011) PORTB = 0X04;  // Pressed '6'
+        else if (input == 0b11011101) PORTB = 0x02;  // Pressed '8'
         else if (input == 0b11101110) PORTB = 0x08;  // Pressed '*'
         else PORTB = 0x00; // None of the desired keys is pressed
     }
