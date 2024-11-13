@@ -284,36 +284,35 @@ uint8_t keypad_to_ascii()
     }
 }
 
-void write_2_nibbles(uint8_t lcd_data) 
-{
+void write_2_nibbles(uint8_t lcd_data) {
     uint8_t temp;
 
     // Send the high nibble
-    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
-    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the high nibble to PORTD
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PORTD = temp;                              // Output the high nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
     _delay_us(1);                              // Small delay to let the signal settle
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
 
     // Send the low nibble
     lcd_data <<= 4;                            // Move low nibble to high nibble position
-    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
-    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the low nibble to PORTD
-    PCA9555_0_write(REG_OUTPUT_0 , PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    temp = (PIND & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PORTD = temp;                              // Output the low nibble to PORTD
+    PORTD |= (1 << PD3);                       // Enable pulse high
     _delay_us(1);                              // Small delay to let the signal settle
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+    PORTD &= ~(1 << PD3);                      // Enable pulse low
 }
 
 void lcd_data(uint8_t data)
 {
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | 0x04);              // LCD_RS = 1, (PD2 = 1) -> For Data
+    PORTD |= 0x04;              // LCD_RS = 1, (PD2 = 1) -> For Data
     write_2_nibbles(data);      // Send data
     _delay_ms(5);            
     return;
 }
 void lcd_command(uint8_t data)
 {
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & 0xFB);              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    PORTD &= 0xFB;              // LCD_RS = 0, (PD2 = 0) -> For Instruction
     write_2_nibbles(data);      // Send data
     _delay_ms(5);             
     return;
@@ -332,29 +331,29 @@ void lcd_init()
     _delay_ms(200);
 
     // Send 0x30 command to set 8-bit mode (three times)
-    PCA9555_0_write(REG_OUTPUT_0,0x30);              // Set command to switch to 8-bit mode
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));       // Enable pulse
+    PORTD = 0x30;              // Set command to switch to 8-bit mode
+    PORTD |= (1 << PD3);       // Enable pulse
     _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));      // Clear enable
+    PORTD &= ~(1 << PD3);      // Clear enable
     _delay_us(30);            // Wait 250 Âµs
 
-    PCA9555_0_write(REG_OUTPUT_0,0x30);            // Repeat command to ensure mode set
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));  
+    PORTD = 0x30;              // Repeat command to ensure mode set
+    PORTD |= (1 << PD3);
     _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    PORTD &= ~(1 << PD3);
     _delay_us(30);
 
-    PCA9555_0_write(REG_OUTPUT_0,0x30);             // Repeat once more
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    PORTD = 0x30;              // Repeat once more
+    PORTD |= (1 << PD3);
     _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    PORTD &= ~(1 << PD3);
     _delay_us(30);
 
     // Send 0x20 command to switch to 4-bit mode
-    PCA9555_0_write(REG_OUTPUT_0,0x20); 
-    PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    PORTD = 0x20;
+    PORTD |= (1 << PD3);
     _delay_us(1);
-     PCA9555_0_write(REG_OUTPUT_0, PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    PORTD &= ~(1 << PD3);
     _delay_us(30);
 
     // Set 4-bit mode, 2 lines, 5x8 dots
@@ -372,27 +371,41 @@ void lcd_init()
 
 
 int main(){
-    DDRB = 0xff;
-    DDRC = 0xff;
-    DDRD = 0xff;
+    //DDRB = 0xff;
+    //DDRC = 0xff;
+    DDRD = 0xFF;
    
     twi_init();
     
     PCA9555_0_write(REG_CONFIGURATION_1, 0xF0);
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
     
     lcd_init();
     
     while(1)
     {
-        lcd_clear_display();
+        //lcd_clear_display();
         lcd_command(0x80);
         
         uint8_t input = keypad_to_ascii();           // Read input 
         
         if (input == 0b01110111) lcd_data('A');      // Pressed 'A'
-        else if (input == 0b10111011) lcd_data('8'); // Pressed '8'
-        else if (input == 0b11011101) lcd_data('6'); // Pressed '6'
+        else if (input == 0b10110111) lcd_data('3'); // Pressed '3'
+        else if (input == 0b11010111) lcd_data('2'); // Pressed '2'
+        else if (input == 0b11100111) lcd_data('1'); // Pressed '1'
+        else if (input == 0b01111011) lcd_data('B'); // Pressed 'B'
+        else if (input == 0b10111011) lcd_data('6'); // Pressed '6'
+        else if (input == 0b11011011) lcd_data('5'); // Pressed '5'
+        else if (input == 0b11101011) lcd_data('4'); // Pressed '4'
+        else if (input == 0b01111101) lcd_data('C'); // Pressed 'C'
+        else if (input == 0b10111101) lcd_data('9'); // Pressed '9'
+        else if (input == 0b11011101) lcd_data('8'); // Pressed '8'
+        else if (input == 0b11101101) lcd_data('7'); // Pressed '7'
+        else if (input == 0b01111110) lcd_data('D'); // Pressed 'D'
+        else if (input == 0b10111110) lcd_data('#'); // Pressed '#'
+        else if (input == 0b11011110) lcd_data('0'); // Pressed '0'
         else if (input == 0b11101110) lcd_data('*'); // Pressed '*'
-        else lcd_clear_display(); // None of the desired keys is pressed
+        //else lcd_clear_display(); // None of the desired keys is pressed
+        //_delay_ms(2000);
     }
 }
