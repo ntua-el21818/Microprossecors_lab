@@ -210,7 +210,7 @@ int main(){
         //first digit
         else{
             
-            if(input != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
+            
             savor = input;
             while(1){           //????????????
                 _delay_ms(15);
@@ -218,7 +218,7 @@ int main(){
                 if (input==savor) continue;
                 else  break;
             }
-            
+            if(input != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
             
             //second - we have to wait even if first digit is wrong
             while(1){
@@ -226,6 +226,15 @@ int main(){
                 if (input == 0xF0) continue; 
                 else{
                     savor = input;
+                    while(1){           //????????????
+                        _delay_ms(15);
+                         input = PCA9555_0_read(REG_INPUT_1);//positive logic
+                        if (input==savor) continue;
+                        else  break;
+                             }
+                    
+                    
+                    
                     if (input!= 0xB0) rejected = true; //checks if second digit is different from correct 3
                     
                     break;
