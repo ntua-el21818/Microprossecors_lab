@@ -188,7 +188,7 @@ int main(){
     bool rejected = false;
     
     DDRB = 0xff;
-    DDRC = 0x00;
+    DDRC = 0xff;
     DDRD = 0xff; 
     
     PORTB = 0x00;
@@ -218,7 +218,7 @@ int main(){
                 if (input==savor) continue;
                 else  break;
             }
-            if(input != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
+            if(savor != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
             
             //second - we have to wait even if first digit is wrong
             while(1){
@@ -235,7 +235,7 @@ int main(){
                     
                     
                     
-                    if (input!= 0xB0) rejected = true; //checks if second digit is different from correct 3
+                    if (savor!= 0xB0) rejected = true; //checks if second digit is different from correct 3
                     
                     break;
                       
