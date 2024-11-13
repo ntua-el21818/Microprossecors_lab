@@ -1,8 +1,11 @@
-#define F_CPU 16000000UL
-#include<avr/io.h>
-#include<avr/interrupt.h>
-#include<util/delay.h>
-#include<stdbool.h>
+#define F_CPU 16000000UL  // 16 MHz
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <stdint.h>
+#include <stdbool.h>
+
 
 
 
@@ -13,11 +16,6 @@
 //Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
 // PCA9555 REGISTERS
-
-
-
-
-
 typedef enum {
  REG_INPUT_0 = 0,
  REG_INPUT_1 = 1,
@@ -28,11 +26,6 @@ typedef enum {
  REG_CONFIGURATION_0 = 6,
  REG_CONFIGURATION_1 = 7
 } PCA9555_REGISTERS;
-
-
-
-
-
 //----------- Master Transmitter/Receiver -------------------
 #define TW_START 0x08
 #define TW_REP_START 0x10
@@ -44,16 +37,18 @@ typedef enum {
 #define TW_MR_SLA_ACK 0x40
 #define TW_MR_SLA_NACK 0x48
 #define TW_MR_DATA_NACK 0x58
+
 #define TW_STATUS_MASK 0b11111000
 #define TW_STATUS (TWSR0 & TW_STATUS_MASK)
+
+
 //initialize TWI clock
-
-
 void twi_init(void)
 {
  TWSR0 = 0; // PRESCALER_VALUE=1
  TWBR0 = TWBR0_VALUE; // SCL_CLOCK 100KHz
 }
+
 // Read one byte from the twi device (request more data from device)
 unsigned char twi_readAck(void)
 {
@@ -68,6 +63,7 @@ TWCR0 = (1<<TWINT) | (1<<TWEN);
 while(!(TWCR0 & (1<<TWINT)));
  return TWDR0;
 }
+
 // Issues a start condition and sends address and transfer direction.
 // return 0 = device accessible, 1= failed to access device
 unsigned char twi_start(unsigned char address)
@@ -85,15 +81,16 @@ TWDR0 = address;
 TWCR0 = (1<<TWINT) | (1<<TWEN);
 // wail until transmission completed and ACK/NACK has been received
 while(!(TWCR0 & (1<<TWINT)));
+
 // check value of TWI Status Register.
 twi_status = TW_STATUS & 0xF8;
 if ( (twi_status != TW_MT_SLA_ACK) && (twi_status != TW_MR_SLA_ACK) )
  {
  return 1;
  }
-
 return 0;
 }
+
 // Send start condition, address, transfer direction.
 // Use ack polling to wait until device is ready
 void twi_start_wait(unsigned char address)
@@ -133,12 +130,12 @@ TWCR0 = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
 break;
  }
 }
+
 // Send one byte to twi device, Return 0 if write successful or 1 if write failed
 unsigned char twi_write( unsigned char data )
 {
 // send data to the previously addressed device
 TWDR0 = data;
-
 TWCR0 = (1<<TWINT) | (1<<TWEN);
 // wait until transmission completed
 while(!(TWCR0 & (1<<TWINT)));
@@ -152,14 +149,16 @@ unsigned char twi_rep_start(unsigned char address)
 {
  return twi_start( address );
 }
+
 // Terminates the data transfer and releases the twi bus
 void twi_stop(void)
 {
-// send stop condition
+ // send stop condition
 TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
 // wait until stop condition is executed and bus released
 while(TWCR0 & (1<<TWSTO));
 }
+
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value)
 {
  twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
@@ -167,6 +166,7 @@ void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value)
  twi_write(value);
  twi_stop();
 }
+
 uint8_t PCA9555_0_read(PCA9555_REGISTERS reg)
 {
 uint8_t ret_val;
@@ -177,10 +177,9 @@ uint8_t ret_val;
  ret_val = twi_readNak();
  twi_stop();
 
+
  return ret_val;
-}
-
-
+} 
 
 int main(){
     
@@ -188,40 +187,46 @@ int main(){
     uint8_t savor;
     bool rejected = false;
     
-    DDRB = 0x00;
+    DDRB = 0xff;
     DDRC = 0x00;
-    DDRD = 0x00; 
+    DDRD = 0xff; 
+    
+    PORTB = 0x00;
     
     twi_init();
-    PCA9555_0_write(REG_CONFIGURATION_1,0xFF); //sets all I01s to inputs!
+    
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
+    PCA9555_0_write(REG_CONFIGURATION_1,0xF0); //
+    PCA9555_0_write(REG_OUTPUT_1,0x00); //
     
     while(1){
-        
-        input = ~PCA9555_0_read(REG_INPUT_1);//positive logic
+        //PORTB = ~PORTB;
+        input = PCA9555_0_read(REG_INPUT_1);//
+        //PORTD = input;
         rejected = false;
         
-        if (input == 0x00) continue; 
+        if (input == 0xF0) continue; 
         
         //first digit
         else{
-            if(input != 0x28) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
+            
+            if(input != 0xD0) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
             savor = input;
-            while(1){           //σπινθηρισμος
+            while(1){           //????????????
                 _delay_ms(15);
-                input = ~PCA9555_0_read(REG_INPUT_1);//positive logic
+                input = PCA9555_0_read(REG_INPUT_1);//positive logic
                 if (input==savor) continue;
                 else  break;
             }
             
-            if(savor != 0x28) rejected = true;  //if first digit is not 2 it is surely wrong passcode 
             
             //second - we have to wait even if first digit is wrong
             while(1){
-                input = ~PCA9555_0_read(REG_INPUT_1);//positive logic
-                if (input == 0x00) continue; 
+                input = PCA9555_0_read(REG_INPUT_1);//positive logic
+                if (input == 0xF0) continue; 
                 else{
                     savor = input;
-                    if (input!= 0x48) rejected = true; //checks if second digit is different from correct 3
+                    if (input!= 0xB0) rejected = true; //checks if second digit is different from correct 3
                     
                     break;
                       
