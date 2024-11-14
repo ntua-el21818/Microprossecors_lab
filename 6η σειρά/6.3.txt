@@ -227,10 +227,11 @@ int main(){
     
     while(1){
         PORTD = 0x00;
+        rejected = false;
         input = check(); 
         
-        rejected = false;
-        PORTD = input;
+        
+        
         if (input == 0xFF) continue; 
         
         //first digit
