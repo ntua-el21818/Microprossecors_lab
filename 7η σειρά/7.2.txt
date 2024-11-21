@@ -339,93 +339,6 @@ void one_wire_transmit_byte(uint8_t byte_to_transmit)
     }
 }
 
-//--------------------------------------------------------------------
-
-///* 1-Wire init */
-//uint8_t one_wire_reset() {
-//    DDRD |= (1<<4);                         // PD4 -> output    
-//    PORTD &= ~(1<<4);                       // PD4 low
-//    _delay_us(480);
-//    
-//    DDRD &= ~(1<<4);                        // PD4 -> input
-//    PORTD &= ~(1<<4);                       // disable pull-up (there's already external 4.7K)   
-//    _delay_us(100);                         // wait for connected devices to transmit the presence pulse
-//    
-//    uint8_t presence = PIND & (1<<4);
-//    _delay_us(380); 
-//
-//    return (presence == 0) ? 1 : 0;         // if a connected device is detected(PD4=0) return 1 else return 0
-//}
-/* read bit */
-//uint8_t one_wire_receive_bit() {
-//    DDRD |= (1<<4);                         // PD4 -> output    
-//    PORTD &= ~(1<<4);                       // PD4 low
-//    _delay_us(2);                           // >1us for slave to set bus high or low
-//
-//    DDRD &= ~(1<<4);                        // PD4 -> input
-//    PORTD &= ~(1<<4);                       // disable pull-up  
-//    _delay_us(10);                          // ~15us master samples bus
-//
-//    uint8_t bit = (PIND & (1<<4)) ? 1 : 0;
-//    
-//    _delay_us(49);                          // complete reading cycle(~65us) and +1us for recovery to stabilize the line 
-//    return bit;
-//}
-///* send bit */
-//void one_wire_transmit_bit(uint8_t bit) {
-//    DDRD |= (1<<4);                         // same as read  
-//    PORTD &= ~(1<<4);                   
-//    _delay_us(2);                       
-//
-//    // Write the bit
-//    if(bit) PORTD |= (1<<4);  
-//    else PORTD &= ~(1<<4);
-//
-//    _delay_us(58);                          // Wait for slave to sample and complete writing cycle
-//
-//    DDRD &= ~(1<<4);                        // Release the line
-//    PORTD &= ~(1<<4);                
-//
-//    _delay_us(1);                           // line recovery time 
-//}
-///* read byte (LSB first) */
-//uint8_t one_wire_receive_byte() {       
-//    uint8_t byte=0;
-//    for(int i=0; i<8; i++) 
-//        byte |= (one_wire_receive_bit() << i);
-//    
-//    return byte;
-//}
-///* send byte (LSB first) */
-//void one_wire_transmit_byte(uint8_t byte) {
-//    for(int i=0; i<8; i++) 
-//        one_wire_transmit_bit( byte & (1<<i));
-//}
-
-
-//int16_t GetTemperature() {
-//    uint8_t lsb, msb;
-//    int16_t temperature;
-//    
-//    if(!one_wire_reset())
-//        return 0x8000;
-//
-//    one_wire_transmit_byte(0xCC);       // only one slave
-//
-//    one_wire_transmit_byte(0x44);        // slave starts measurement
-//    while(!one_wire_receive_bit());         // busy-wait to end, DS1820 sends 1    
-//    
-//    one_wire_reset();                       // send reset again for next sequence of communication
-//    one_wire_transmit_byte(0xCC);
-//    one_wire_transmit_byte(0xBE);
-//    
-//    lsb = one_wire_receive_byte(); 
-//    msb = one_wire_receive_byte(); 
-//    temperature = ((int16_t)msb << 8) | lsb;
-//    
-//    return temperature;
-//}
-
 int16_t GetTemperature()
 {
     bool connected_device = one_wire_reset();   // Check for connected device
@@ -449,153 +362,21 @@ int16_t GetTemperature()
     return temperature;
 }
 
-void lcd_print(const char* str) {
-    while(*str) {
-        lcd_data(*str++);                           // Send each character to the LCD
-    }
-}
-
-//int main() {
-//    int16_t temperature;
-//    uint8_t sign, lsb , digit1, digit2, digit3;
-//    
-//    twi_init();
-//    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
-//
-//    lcd_init();
-//    _delay_ms(100);
-//    
-//    
-//    while(1) {
-//        lcd_clear_display();
-//        
-//        temperature = GetTemperature();
-//        
-//        if(temperature == 0x8000) {                 // no active device
-//            lcd_print("NO Device");
-//            _delay_ms(400);
-//            continue;
-//        }
-//        
-//        sign=0;
-//        if(temperature & 0xF800) {
-//            sign = 1;
-//            lcd_data('-');
-//            temperature = ~temperature + 1;         // convert to positive
-//        }
-//        else lcd_data('+');
-//        
-//        lsb = (temperature & 0x0008) ? 1 : 0;       // lsb indicates .0 or .5
-//        temperature = (temperature >> 4) & 0x00FF;  // integer part 
-//        
-//        digit1 = temperature / 100;
-//        digit2 = (temperature / 10) % 10;
-//        digit3 = temperature % 10;
-//
-//        if(digit1) 
-//            lcd_data(digit1 + '0');
-//        if(digit1 != 0 || digit2 != 0) 
-//            lcd_data(digit2 + '0');
-//        lcd_data(digit3 + '0');
-//        
-//        lcd_data('.');
-//        lcd_data(lsb ? '5' : '0');
-//        lcd_data(' ');
-//        lcd_data(223);                              // degree symbol 
-//        lcd_data('C');
-//        
-//        _delay_ms(400);
-//    }
-//}
-//int main(void)
-//{
-//    DDRD = 0xFF;    // For LCD
-//    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
-//    
-//    lcd_init();
-//    twi_init();
-//
-//    while(1)
-//    {
-//        lcd_clear_display();
-//        
-//        int16_t temperature = GetTemperature();
-//        if (temperature == 0x8000) // NO Device 9 bits no need for extra line
-//        {
-//            lcd_data('N');
-//            lcd_data('O');
-//            lcd_data(' ');
-//            lcd_data('D');
-//            lcd_data('e');
-//            lcd_data('v');
-//            lcd_data('i');
-//            lcd_data('c');
-//            lcd_data('e');
-//        } else {
-//            
-//            if (temperature & 0xF800) // bits BIT11-BIT15 -> SIGN
-//            { // Negative temperature
-//                temperature = ~temperature + 1; // complement of two
-//                lcd_data('-');
-//            }
-//            // else we have positive 
-//            else lcd_data('+');
-//            
-//            // DS18B20 from page 7 (MSB-LSB)
-//            // bit3 -> 2^(-1)
-//            // bit4 -> 2^0
-//            // bit5 -> 2^1
-//            // bit6 -> 2^2
-//            uint8_t bit3, bit4, bit5, bit6; // Only 3 integer digits (optional))
-//            uint8_t float_part;
-//            
-//            float_part = (temperature & 0x000F); // BIT0-BIT3
-//            bit3 = (float_part & 0x0008) ? 1 : 0; // One float accuracy, if bit3 is set -> .5, else .0
-//            
-//            temperature = (temperature >> 4) & 0x00EF; // take the integer part in the LSB position
-//            
-//            if (temperature >= 0x0064) // temperature >= 100 C
-//            {
-//                bit6 = temperature / 100+ '0';
-//                lcd_data('bit6');
-//                bit5 = temperature / 10 + '0';
-//                lcd_data('bit5');
-//                bit4 = temperature % 10 + '0';
-//                lcd_data('bit4');
-//            } else {
-//                bit5 = temperature / 10 + '0';
-//                lcd_data('bit5');
-//                bit4 = temperature % 10 + '0';
-//                lcd_data('bit4');
-//            }
-//                    
-//            lcd_data('.');
-//            lcd_data(bit3 ? '5' : '0'); // If bit3 = 1, means 2^(-1) = .5, else .0
-//            
-//            // If we want to add Celsius in the display
-//            lcd_data(' ');
-//            lcd_data(223); // sign of Celsius
-//            lcd_data('C');
-//
-//        }
-//        _delay_ms(400);
-//    }
-//}
-
 int main(){
     DDRB = 0xff;
     DDRC = 0x00;
+    
     twi_init();
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
+    
     lcd_init();
     
     while(1)
     {
       
-    lcd_clear_display();
-        
-        
-        
-    uint16_t temperature = GetTemperature();
+        lcd_clear_display();
+
+        uint16_t temperature = GetTemperature();
         
         
         if (temperature == 0x8000) // NO Device 9 bits no need for extra line
@@ -612,28 +393,64 @@ int main(){
         } 
         else {
             
-            if ((temperature&0x8000)>0) {
+            if ((temperature & 0x8000) > 0) {
                 temperature = ~temperature + 1;
                 lcd_data('-'); 
             } //if negative convert to its value
             else lcd_data('+');
             
-            //....
+            int dekadika = 0; 
             //for now 
-            temperature = temperature >> 4 ; 
+            if((temperature&0x01)==0x01) dekadika += 625;
+            temperature = temperature>>1;
+            if((temperature&0x01)==0x01) dekadika += 1250;
+            temperature = temperature>>1;
+            if((temperature&0x01)==0x01) dekadika += 2500;
+            temperature = temperature>>1;
+            if((temperature&0x01)==0x01) dekadika += 5000;
+            temperature = temperature >> 1 ; 
+            
+            
+            
+            
             int result = 0; 
-            for (int i=0; i<=6; i++){
+            for (int i = 0; i <= 6; i++){
                 if (temperature & 0x0001 > 0) result += (int)pow(2,i);  
                 temperature = temperature >> 1; 
             }
+            bool is_zero = false;
+            if(result/100!=0) {
+                lcd_data('0'+(result/100));
+                result = result % 100;
+            }
+            else is_zero = true;
             
-            lcd_data('0'+(result/100));
-            result = result % 100; 
-            lcd_data('0'+(result/10));
-            result = result % 10; 
+            
+            
+            if(result/10==0 && is_zero==true) ; 
+            else{
+                lcd_data('0'+(result/10));
+                result = result % 10; 
+            }
             lcd_data('0'+result); 
             //might add something here
+            lcd_data('.');
+            result = dekadika/1000; 
+            lcd_data('0'+result); 
+            dekadika %= 1000;
             
+            result = dekadika/100; 
+            lcd_data('0'+result); 
+            dekadika %= 100;
+            
+            result = dekadika/10;
+            lcd_data('0'+result); 
+            
+            dekadika %= 10;
+            lcd_data('0'+dekadika); 
+                    
+            
+                    
             lcd_data(' ');
             lcd_data(223);
             lcd_data('C');
