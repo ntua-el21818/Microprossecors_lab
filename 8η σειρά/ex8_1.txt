@@ -183,9 +183,7 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg)
 }
 
 /* Routine: usart_init 
-Description: 
-This routine initializes the 
-usart as shown below. 
+Description: This routine initializes the usart as shown below. 
 ------- INITIALIZATIONS ------- 
 Baud rate: 9600 (Fck= 8MH) 
 Asynchronous mode 
@@ -207,9 +205,7 @@ void usart_init(unsigned int ubrr) {
 } 
 
 /* Routine: usart_transmit 
-Description: 
-This routine sends a byte of data
-using usart. 
+Description: This routine sends a byte of data using usart. 
 parameters: 
 data: the byte to be transmitted 
 return value: None. 
@@ -221,9 +217,7 @@ void usart_transmit(uint8_t data) {
 } 
 
 /* Routine: usart_receive 
-Description: 
-This routine receives a byte of data 
-from usart. 
+Description: This routine receives a byte of data from usart. 
 parameters: None. 
 return value: the received byte 
 */ 
@@ -232,3 +226,7 @@ uint8_t usart_receive() {
     while(!(UCSR0A&(1<<RXC0))); 
     return UDR0; 
 } 
+
+int main() {
+    
+}
