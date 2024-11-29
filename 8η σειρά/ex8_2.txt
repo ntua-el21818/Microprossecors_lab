@@ -346,7 +346,7 @@ void receive_response(char *response) {
     }
     // Put with force spaces instead of null   
     for(i; i<=9; i++){
-        response[i] = " ";
+        response[i] = NULL;
     }
 }
 
@@ -490,7 +490,28 @@ uint16_t ADC_conversion()
     return ADC;                     // Return the value, (ADCH:ADCL)
 }
 
-#define SIZE 10
+//-------------------------------- Keypad --------------------------------------
+uint8_t check(){
+   
+    uint8_t stili,grammi;  
+    //check which stili is pressed
+   
+    PCA9555_0_write(REG_CONFIGURATION_1, 0xF0);
+    stili = PCA9555_0_read(REG_INPUT_1); 
+    if(stili == 0xF0) return 0xFF;
+
+    
+    PCA9555_0_write(REG_CONFIGURATION_1, 0x0F);
+    grammi = PCA9555_0_read(REG_INPUT_1);
+    if (grammi == 0x0F) return 0xFF; 
+    
+    return ((grammi|0xF0) & (stili|0x0F));
+}
+
+
+#define SIZE_ANSWER 10
+#define SIZE_STATUS 15
+#define OFFSET 13 
 int main() {
     DDRB = 0xFF;
     DDRC = 0x00;
@@ -507,7 +528,7 @@ int main() {
     while(1) {
         transmit_command("ESP:connect\n");
         
-        char answer[SIZE];
+        char answer[SIZE_ANSWER];
         receive_response(answer);
                 
         if (strcmp(answer, "Success\n") == 0) {
@@ -522,13 +543,13 @@ int main() {
         _delay_ms(2000);
         
         lcd_clear_display();
-    }
+    } // end loop for ESP connection
     
     // Sending command for url ...
     while(1) {
         transmit_command("ESP:url:\"http://192.168.1.250:5000/data\n\"");
         
-        char answer_no2[SIZE];
+        char answer_no2[SIZE_ANSWER];
         receive_response(answer_no2);
         
         if (strcmp(answer_no2, "Success\n") == 0) {
@@ -542,7 +563,11 @@ int main() {
         _delay_ms(2000);
         
         lcd_clear_display();
-    }
+    } // end loop for ESP url
+    
+    
+    
+    while(1) { // temperature, H2O, no3, hashtag
     
     // Getting the temperature 
     uint16_t temperature = GetTemperature();
@@ -573,24 +598,88 @@ int main() {
             temperature = temperature >> 1; 
         } // result saves our temperature
         
-        int offset = 15;
-        result += offset; // took human temperature
+        result += OFFSET; // Took human temperature
         
-        lcd_print(result);
+//        lcd_data(result/10 + '0');
+//        lcd_data(result%10 + '0');
     }
+    
     
     // Getting the ADC-PWM
     PWM_init();
     ADC_init();
     
-    int DC_VALUE;
-    
     // Connection of ADC0 with POT1
     uint16_t ADC_value = ADC_conversion();      // Read POT1
-    DC_VALUE = ADC_value;
-    OCR1A = DC_VALUE;
+    int DC_VALUE = ADC_value;
+    //OCR1A = DC_VALUE;
     _delay_ms(100);         // Small delay for better performance
     
-    lcd_print(DC_VALUE);
+//    lcd_data(DC_VALUE/10 + '0');
+//    lcd_data(DC_VALUE%10 + '0');
+    
+    
+    // Waiting for keypad ...
+    uint8_t input = 0x00; 
+    uint8_t savor;
+    bool pressed_no3, pressed_hashtag;
+    char status[SIZE_STATUS];
+    
+    while(1) {
+        pressed_no3 = false;
+        input = check(); // Check for the first pressed key
+        
+        
+        // Till now none of buttons 3 or # is pressed, so status is 'OK'
+        snprintf(status, sizeof(status), "OK");
+        
+        // Begin checking for pressed buttons
+        if (input == 0xFF) continue; 
+        
+        //first digit -> 3
+        else {
+            savor = input;
+            
+            while(1){
+                _delay_ms(15);
+                input = check(); // Check again for debouncing
+                if (input == savor) continue;
+                else break;
+            }
+
+            if(savor == 0xB7) {
+                pressed_no3 = true;  // Found digit 3
+                snprintf(status, sizeof(status), "NURSE CALL"); // Update status because symbol # found
+                break; // And go check for second -> #
+            }
+        }
+    }
+   
+    // First digit is found, so status now is "NURSE CALL", wait with that status until # is pressed
+
+    while(1){
+        pressed_hashtag = false;
+        input = check(); // Check for the second pressed key
+                
+        if (input == 0xFF) continue; 
+                
+        else{
+            savor = input;
+            while(1){          
+                _delay_ms(15);
+                input = check(); // Check again for debouncing
+                if (input == savor) continue;
+                else break;
+            }
+
+            if (savor == 0xBE) {
+                pressed_hashtag = true; // Hashtag symbol is found, go check for blood pressure and temperature
+                break;   
+            }
+        }
+    }
+    
+    if 
+}
 }
              
