@@ -5,6 +5,7 @@
 #include<util/delay.h>
 #include<stdbool.h>
 
+//-------------------------- PCA -----------------------------------------------
 #define PCA9555_0_ADDRESS 0x40      //A0=A1=A2=0 by hardware
 #define TWI_READ 1                  // reading from twi device
 #define TWI_WRITE 0                 // writing to twi device
@@ -182,6 +183,92 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg)
     return ret_val;
 }
 
+// ------------------------------- LCD -----------------------------------------
+void write_2_nibbles(uint8_t lcd_data) {
+    uint8_t temp;
+
+    // Send the high nibble
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the high nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+
+    // Send the low nibble
+    lcd_data <<= 4;                            // Move low nibble to high nibble position
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the low nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0 , PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+}
+
+void lcd_data(uint8_t data)
+{
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | 0x04);              // LCD_RS = 1, (PD2 = 1) -> For Data
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);            
+    return;
+}
+void lcd_command(uint8_t data)
+{
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & 0xFB);              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);             
+    return;
+}
+
+void lcd_clear_display()
+{
+    uint8_t clear_disp = 0x01;  // Clear display command
+    lcd_command(clear_disp);    
+    _delay_ms(5);               // Wait 5 msec
+    return;
+}
+
+void lcd_init() {
+    _delay_ms(200);
+
+    // Send 0x30 command to set 8-bit mode (three times)
+    PCA9555_0_write(REG_OUTPUT_0,0x30);              // Set command to switch to 8-bit mode
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));       // Enable pulse
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));      // Clear enable
+    _delay_us(30);            // Wait 250 Âµs
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);            // Repeat command to ensure mode set
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));  
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);             // Repeat once more
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    // Send 0x20 command to switch to 4-bit mode
+    PCA9555_0_write(REG_OUTPUT_0,0x20); 
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    // Set 4-bit mode, 2 lines, 5x8 dots
+    lcd_command(0x28);
+
+    // Display ON, Cursor OFF
+    lcd_command(0x0C);
+
+    // Clear display
+    lcd_clear_display();
+
+    // Entry mode: Increment cursor, no display shift
+    lcd_command(0x06);
+}
+
+//-------------------------------- USART ---------------------------------------
 /* Routine: usart_init 
 Description: This routine initializes the usart as shown below. 
 ------- INITIALIZATIONS ------- 
@@ -228,5 +315,6 @@ uint8_t usart_receive() {
 } 
 
 int main() {
+    usart_init(9600);
     
 }
