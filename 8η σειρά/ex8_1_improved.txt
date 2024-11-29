@@ -1,0 +1,411 @@
+#define F_CPU 16000000UL
+
+#include<avr/io.h>
+#include<avr/interrupt.h>
+#include<util/delay.h>
+#include<stdbool.h>
+#include<stdio.h>
+#include<string.h>
+
+//-------------------------- PCA -----------------------------------------------
+#define PCA9555_0_ADDRESS 0x40      //A0=A1=A2=0 by hardware
+#define TWI_READ 1                  // reading from twi device
+#define TWI_WRITE 0                 // writing to twi device
+#define SCL_CLOCK 100000L           // twi clock in Hz
+
+//Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
+#define TWBR0_VALUE (((F_CPU/SCL_CLOCK)-16)/2)
+
+// PCA9555 REGISTERS
+typedef enum {
+    REG_INPUT_0 = 0,
+    REG_INPUT_1 = 1,
+    REG_OUTPUT_0 = 2,
+    REG_OUTPUT_1 = 3,
+    REG_POLARITY_INV_0 = 4,
+    REG_POLARITY_INV_1 = 5,
+    REG_CONFIGURATION_0 = 6,
+    REG_CONFIGURATION_1 = 7,
+} PCA9555_REGISTERS;
+
+//----------- Master Transmitter/Receiver -------------------
+#define TW_START 0x08
+#define TW_REP_START 0x10
+
+//---------------- Master Transmitter ----------------------
+#define TW_MT_SLA_ACK 0x18
+#define TW_MT_SLA_NACK 0x20
+#define TW_MT_DATA_ACK 0x28
+
+//---------------- Master Receiver ----------------
+#define TW_MR_SLA_ACK 0x40
+#define TW_MR_SLA_NACK 0x48
+#define TW_MR_DATA_NACK 0x58
+
+#define TW_STATUS_MASK 0b11111000
+#define TW_STATUS (TWSR0 & TW_STATUS_MASK)
+
+//initialize TWI clock
+void twi_init(void)
+{
+    TWSR0 = 0;              // PRESCALER_VALUE=1
+    TWBR0 = TWBR0_VALUE;    // SCL_CLOCK 100KHz
+}
+
+// Read one byte from the twi device ( request more data from device)
+unsigned char twi_readAck(void)
+{
+    TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWEA);
+    while(!(TWCR0 & (1<<TWINT)));   // Wait till TW1 sends ACK back, means job done
+    return TWDR0;
+}
+
+// Issues a start condition and sends address and transfer direction.
+// return 0 = device accessible, 1= failed to access device
+unsigned char twi_start(unsigned char address)
+{
+    uint8_t twi_status;
+    // send START condition
+    TWCR0 = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+    // wait until transmission completed
+    while(!(TWCR0 & (1<<TWINT)));
+    // check value of TWI Status Register.
+    twi_status = TW_STATUS & 0xF8;
+    if ( (twi_status != TW_START) && (twi_status != TW_REP_START)) return 1;
+    // send device address
+    TWDR0 = address;
+    TWCR0 = (1<<TWINT) | (1<<TWEN);
+    // wail until transmission completed and ACK/NACK has been received
+    while(!(TWCR0 & (1<<TWINT)));
+    // check value of TWI Status Register.
+    twi_status = TW_STATUS & 0xF8;
+    if ( (twi_status != TW_MT_SLA_ACK) && (twi_status != TW_MR_SLA_ACK) )
+    {
+        return 1; // failed to access device
+    }
+    return 0;
+}
+
+// Send start condition, address, transfer direction.
+// Use ACK polling to wait until device is ready
+void twi_start_wait(unsigned char address)
+{
+    uint8_t twi_status;
+    while ( 1 )
+    {
+        // send START condition
+        TWCR0 = (1<<TWINT) | (1<<TWSTA) | (1<<TWEN);
+        
+        // wait until transmission completed
+        while(!(TWCR0 & (1<<TWINT)));
+        
+        // check value of TWI Status Register.
+        twi_status = TW_STATUS & 0xF8;
+        if ( (twi_status != TW_START) && (twi_status != TW_REP_START)) continue;
+        
+        // send device address
+        TWDR0 = address;
+        TWCR0 = (1<<TWINT) | (1<<TWEN);
+        
+        // wail until transmission completed
+        while(!(TWCR0 & (1<<TWINT)));
+        
+        // check value of TWI Status Register.
+        twi_status = TW_STATUS & 0xF8;
+        if ( (twi_status == TW_MT_SLA_NACK )||(twi_status ==TW_MR_DATA_NACK) )
+        {
+            /* device busy, send stop condition to terminate write operation */
+            TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
+            
+            // wait until stop condition is executed and bus released
+            while(TWCR0 & (1<<TWSTO));
+            
+            continue;
+        }
+        break;
+    }
+}
+
+// Send one byte to twi device, Return 0 if write successful or 1 if write failed
+unsigned char twi_write(unsigned char data)
+{
+    // send data to the previously addressed device
+    TWDR0 = data;
+    TWCR0 = (1<<TWINT) | (1<<TWEN);
+    // wait until transmission completed
+    
+    while(!(TWCR0 & (1<<TWINT)));
+    if((TW_STATUS & 0xF8) != TW_MT_DATA_ACK) return 1; // write failed
+    return 0;
+}
+
+// Send repeated start condition, address, transfer direction
+//Return: 0 device accessible
+// 1 failed to access device
+unsigned char twi_rep_start(unsigned char address)
+{
+    return twi_start(address);
+}
+
+// Terminates the data transfer and releases the twi bus
+void twi_stop(void)
+{
+    // send stop condition
+    TWCR0 = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
+    // wait until stop condition is executed and bus released
+    while(TWCR0 & (1<<TWSTO));
+}
+
+unsigned char twi_readNak(void)
+{
+    TWCR0 = (1<<TWINT) | (1<<TWEN);
+    while(!(TWCR0 & (1<<TWINT)));
+    
+    return TWDR0;
+}
+
+void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value)
+{
+    twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
+    twi_write(reg);
+    twi_write(value);
+    twi_stop();
+}
+
+uint8_t PCA9555_0_read(PCA9555_REGISTERS reg)
+{
+    uint8_t ret_val;
+    
+    twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
+    twi_write(reg);
+    twi_rep_start(PCA9555_0_ADDRESS + TWI_READ);
+    ret_val = twi_readNak();
+    twi_stop();
+    
+    return ret_val;
+}
+
+// ------------------------------- LCD -----------------------------------------
+void write_2_nibbles(uint8_t lcd_data) {
+    uint8_t temp;
+
+    // Send the high nibble
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the high nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+
+    // Send the low nibble
+    lcd_data <<= 4;                            // Move low nibble to high nibble position
+    temp = (PCA9555_0_read(REG_OUTPUT_0) & 0x0F) | (lcd_data & 0xF0);  // Keep lower 4 bits of PIND and set high nibble of new lcd_data
+    PCA9555_0_write(REG_OUTPUT_0 , temp);                              // Output the low nibble to PORTD
+    PCA9555_0_write(REG_OUTPUT_0 , PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));                       // Enable pulse high
+    _delay_us(1);                              // Small delay to let the signal settle
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));                      // Enable pulse low
+}
+
+void lcd_data(uint8_t data)
+{
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | 0x04);              // LCD_RS = 1, (PD2 = 1) -> For Data
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);            
+    return;
+}
+void lcd_command(uint8_t data)
+{
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & 0xFB);              // LCD_RS = 0, (PD2 = 0) -> For Instruction
+    write_2_nibbles(data);      // Send data
+    _delay_ms(5);             
+    return;
+}
+
+void lcd_clear_display()
+{
+    uint8_t clear_disp = 0x01;  // Clear display command
+    lcd_command(clear_disp);    
+    _delay_ms(5);               // Wait 5 msec
+    return;
+}
+
+void lcd_init() {
+    _delay_ms(200);
+
+    // Send 0x30 command to set 8-bit mode (three times)
+    PCA9555_0_write(REG_OUTPUT_0,0x30);              // Set command to switch to 8-bit mode
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));       // Enable pulse
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));      // Clear enable
+    _delay_us(30);            // Wait 250 Âµs
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);            // Repeat command to ensure mode set
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));  
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    PCA9555_0_write(REG_OUTPUT_0,0x30);             // Repeat once more
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    // Send 0x20 command to switch to 4-bit mode
+    PCA9555_0_write(REG_OUTPUT_0,0x20); 
+    PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) | (1 << PD3));
+    _delay_us(1);
+     PCA9555_0_write(REG_OUTPUT_0,PCA9555_0_read(REG_OUTPUT_0) & ~(1 << PD3));
+    _delay_us(30);
+
+    // Set 4-bit mode, 2 lines, 5x8 dots
+    lcd_command(0x28);
+
+    // Display ON, Cursor OFF
+    lcd_command(0x0C);
+
+    // Clear display
+    lcd_clear_display();
+
+    // Entry mode: Increment cursor, no display shift
+    lcd_command(0x06);
+}
+
+//-------------------------------- USART ---------------------------------------
+/* Routine: usart_init 
+Description: This routine initializes the usart as shown below. 
+------- INITIALIZATIONS ------- 
+Baud rate: 9600 (Fck= 8MH) 
+Asynchronous mode 
+Transmitter on 
+Reciever on 
+Communication parameters: 8 Data ,1 Stop, no Parity 
+-------------------------------- 
+parameters: ubrr to control the BAUD. 
+return value: None.
+*/ 
+
+void usart_init(unsigned int ubrr) { 
+    UCSR0A=0; 
+    UCSR0B=(1<<RXEN0)|(1<<TXEN0); // enable receiving and transmitting
+    UBRR0H=(unsigned char)(ubrr>>8); 
+    UBRR0L=(unsigned char)ubrr; 
+    UCSR0C=(3 << UCSZ00); // configure the frame size to 8 data
+    return; 
+} 
+
+/* Routine: usart_transmit 
+Description: This routine sends a byte of data using usart. 
+parameters: 
+data: the byte to be transmitted 
+return value: None. 
+*/ 
+
+void usart_transmit(uint8_t data) { 
+    while(!(UCSR0A&(1<<UDRE0))); 
+    UDR0=data; 
+} 
+
+/* Routine: usart_receive 
+Description: This routine receives a byte of data from usart. 
+parameters: None. 
+return value: the received byte 
+*/ 
+
+uint8_t usart_receive() { 
+    while(!(UCSR0A&(1<<RXC0))); 
+    return UDR0; 
+}
+
+
+void transmit_command(char *data) {
+    int i = 0;
+    while (data[i] != '\0') {
+        usart_transmit(data[i]);
+        i++;
+    }
+}
+
+void receive_response(char *response) {
+    char input; 
+    int i = 0;
+    
+    while(1){
+        input = usart_receive();
+        if(input == '\n') {
+            response[i] = input;
+            i++;
+            break;
+        } else { 
+            if (input == '"');
+                
+            else {
+                response[i] = input; 
+                i++; 
+            }
+        }
+    }
+    for(i; i<=9; i++){
+        response[i] = " ";
+    }
+}
+
+void lcd_print(const char* str) {
+    while(*str) {
+        lcd_data(*str++); // Send each character to the LCD
+    }
+}
+
+#define SIZE 10
+int main() {
+    DDRC = 0x00;
+    
+    twi_init();
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
+    
+    usart_init(103); // for baud rate 9600
+    lcd_init();
+    
+    lcd_clear_display();
+    
+    // Waiting till ESP connects ...
+    while(1) {
+        transmit_command("ESP:connect\n");
+        
+        char answer[SIZE];
+        receive_response(answer);
+                
+        if (strcmp(answer, "Success\n") == 0) {
+
+            lcd_print("1.Success");
+            _delay_ms(2000);
+            
+            lcd_clear_display();
+            break;
+        }
+        else lcd_print("1.Fail");
+        _delay_ms(2000);
+        
+        lcd_clear_display();
+    }
+    
+    // Sending command for url ...
+    while(1) {
+        transmit_command("ESP:url:\"http://192.168.1.250:5000/data\n\"");
+        
+        char answer_no2[SIZE];
+        receive_response(answer_no2);
+        
+        if (strcmp(answer_no2, "Success\n") == 0) {
+            lcd_print("2.Success");
+            _delay_ms(2000);
+            
+            lcd_clear_display();
+            break;
+        }
+        else lcd_print("2.Fail");
+        _delay_ms(2000);
+        
+        lcd_clear_display();
+    }
+    
+}
