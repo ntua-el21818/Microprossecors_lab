@@ -4,6 +4,8 @@
 #include<avr/interrupt.h>
 #include<util/delay.h>
 #include<stdbool.h>
+#include<stdio.h>
+#include<string.h>
 
 //-------------------------- PCA -----------------------------------------------
 #define PCA9555_0_ADDRESS 0x40      //A0=A1=A2=0 by hardware
@@ -284,10 +286,10 @@ return value: None.
 
 void usart_init(unsigned int ubrr) { 
     UCSR0A=0; 
-    UCSR0B=(1<<RXEN0)|(1<<TXEN0); 
+    UCSR0B=(1<<RXEN0)|(1<<TXEN0); // enable receiving and transmitting
     UBRR0H=(unsigned char)(ubrr>>8); 
     UBRR0L=(unsigned char)ubrr; 
-    UCSR0C=(3 << UCSZ00); 
+    UCSR0C=(3 << UCSZ00); // configure the frame size to 8 data
     return; 
 } 
 
@@ -312,9 +314,91 @@ return value: the received byte
 uint8_t usart_receive() { 
     while(!(UCSR0A&(1<<RXC0))); 
     return UDR0; 
-} 
+}
 
+
+void transmit_command(char *data) {
+    int i = 0;
+    while (data[i] != '\0') {
+        usart_transmit(data[i]);
+        i++;
+    }
+}
+
+void receive_response(char *response) {
+    char input; 
+    int i = 0;
+    
+    while(1){
+        input = usart_receive();
+        if(input == '\n') {
+            response[i] = '\n';
+            break;
+        } else { 
+            if (input == '"') { continue; }
+            
+            else {
+                response[i] = input; 
+                i++; 
+            }
+        }
+    }
+}
+
+void lcd_print(const char* str) {
+    while(*str) {
+        lcd_data(*str++); // Send each character to the LCD
+    }
+}
+
+#define SIZE 15
 int main() {
-    usart_init(9600);
+    DDRC = 0x00;
+    
+    twi_init();
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
+    
+    usart_init(103); // for baud rate 9600
+    
+    lcd_clear_display();
+    
+    // Waiting till ESP connects ...
+    while(1) {
+        transmit_command("ESP:connect\n");
+        
+        char answer[SIZE];
+        receive_response(answer);
+        
+        lcd_clear_display();
+        
+        if (strcmp(answer, "Success") == 0) {
+            lcd_print("1.Success");
+            _delay_ms(500);
+            break;
+        }
+        else lcd_print("1.Fail");
+        _delay_ms(200);
+        
+        lcd_clear_display();
+    }
+    // Sending command for url ...
+    while(1) {
+        transmit_command("ESP:url:\"http://192.168.1.250:5000/data\n\"");
+        
+        char answer_no2[SIZE];
+        receive_response(answer_no2);
+        
+        lcd_clear_display();
+        
+        if (strcmp(answer_no2, "Success") == 0) {
+            lcd_print("2.Success");
+            _delay_ms(500);
+            break;
+        }
+        else lcd_print("2.Fail");
+        _delay_ms(200);
+        
+        lcd_clear_display();
+    }
     
 }
