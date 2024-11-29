@@ -335,8 +335,8 @@ void receive_response(char *response) {
             response[i] = '\n';
             break;
         } else { 
-            if (input == '"') { continue; }
-            
+            if (input == '"');
+                
             else {
                 response[i] = input; 
                 i++; 
@@ -351,7 +351,7 @@ void lcd_print(const char* str) {
     }
 }
 
-#define SIZE 15
+#define SIZE 10
 int main() {
     DDRC = 0x00;
     
@@ -359,6 +359,7 @@ int main() {
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // EXT_PORT0 -> output
     
     usart_init(103); // for baud rate 9600
+    lcd_init();
     
     lcd_clear_display();
     
@@ -368,19 +369,21 @@ int main() {
         
         char answer[SIZE];
         receive_response(answer);
-        
-        lcd_clear_display();
-        
-        if (strcmp(answer, "Success") == 0) {
+                
+        if (strcmp(answer, "Success\n") == 0) {
+
             lcd_print("1.Success");
-            _delay_ms(500);
+            _delay_ms(2000);
+            
+            lcd_clear_display();
             break;
         }
         else lcd_print("1.Fail");
-        _delay_ms(200);
+        _delay_ms(2000);
         
         lcd_clear_display();
     }
+    
     // Sending command for url ...
     while(1) {
         transmit_command("ESP:url:\"http://192.168.1.250:5000/data\n\"");
@@ -388,15 +391,15 @@ int main() {
         char answer_no2[SIZE];
         receive_response(answer_no2);
         
-        lcd_clear_display();
-        
-        if (strcmp(answer_no2, "Success") == 0) {
+        if (strcmp(answer_no2, "Success\n") == 0) {
             lcd_print("2.Success");
-            _delay_ms(500);
+            _delay_ms(2000);
+            
+            lcd_clear_display();
             break;
         }
         else lcd_print("2.Fail");
-        _delay_ms(200);
+        _delay_ms(2000);
         
         lcd_clear_display();
     }
