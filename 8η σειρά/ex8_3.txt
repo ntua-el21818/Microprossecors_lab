@@ -511,6 +511,7 @@ uint8_t check(){
 
 #define SIZE_ANSWER 10
 #define SIZE_STATUS 15
+#define SIZE_PAYLOAD 100
 #define OFFSET 13 
 int main() {
     DDRB = 0xFF;
@@ -705,14 +706,15 @@ int main() {
         }
         
         
-        
-        char* message = "ESP:payload:[{\"name\":\"temperature\",\"value\":\"&result\".\"&dekadika\"},{\"name\":\"pressure\",\"value\":\"&pressure\"},{\"name\":\"team\",\"value\":\"23\"},{\"name\":\"status\",\"value\":\"&status\"}]\n";
+        char message[SIZE_PAYLOAD];
+        snprintf(message, sizeof(message), "ESP:payload:[{\"name\":\"temperature\",\"value\":\"%d\".\"%d\"},{\"name\":\"pressure\",\"value\":\"%d\"},{\"name\":\"team\",\"value\":\"23\"},{\"name\":\"status\",\"value\":\"%s\"}]\n", result, dekadika, pressure, status);
         transmit_command(&message);
         
         char answer_no4[SIZE_ANSWER];
         receive_response(answer_no4);
         
         if (strcmp(answer_no4, "200 OK\n") == 0) {
+            lcd_clear_display();
             lcd_print("4. 200 OK");
             _delay_ms(2000);
             
@@ -720,6 +722,7 @@ int main() {
             break;
         }
         else {
+            lcd_clear_display();
             lcd_print("4. ");
             lcd_print(&answer_no4);
         }
