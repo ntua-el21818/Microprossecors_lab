@@ -565,6 +565,25 @@ int main() {
         lcd_clear_display();
     } // end loop for ESP url
     
+    while(1) {
+        transmit_command("ESP:payload:[{\"name\":\"team\",\"value\":\"23\"]\n");
+        
+        char answer_no3[SIZE_ANSWER];
+        receive_response(answer_no3);
+        
+        if (strcmp(answer_no3, "Success\n") == 0) {
+            lcd_print("3.Success");
+            _delay_ms(2000);
+            
+            lcd_clear_display();
+            break;
+        }
+        else lcd_print("3.Fail");
+        _delay_ms(2000);
+        
+        lcd_clear_display();
+    }
+    
     
     bool pressed_no3 = false;
     bool pressed_hashtag = false;
@@ -647,8 +666,7 @@ int main() {
 
         lcd_data('.');
 
-        dekadika = dekadika/1000; 
-        lcd_data('0' + dekadika); 
+        lcd_data('0' + dekadika/1000); 
 
         lcd_command(0xC0); // New line
 
@@ -678,15 +696,39 @@ int main() {
                 snprintf(status, sizeof(status), "NURSE CALL"); // Update status because symbol # found
                 lcd_clear_display();
                 lcd_print(&status);
-
-                //break; // And go check for second -> #
             }
+            
             else if (savor == 0xBE && pressed_no3 == true) {
                 pressed_hashtag = true;
                 pressed_no3 = false;
             }
         }
-
+        
+        
+        
+        char* message = "ESP:payload:[{\"name\":\"temperature\",\"value\":\"&result\".\"&dekadika\"},{\"name\":\"pressure\",\"value\":\"&pressure\"},{\"name\":\"team\",\"value\":\"23\"},{\"name\":\"status\",\"value\":\"&status\"}]\n";
+        transmit_command(&message);
+        
+        char answer_no4[SIZE_ANSWER];
+        receive_response(answer_no4);
+        
+        if (strcmp(answer_no4, "200 OK\n") == 0) {
+            lcd_print("4. 200 OK");
+            _delay_ms(2000);
+            
+            lcd_clear_display();
+            break;
+        }
+        else {
+            lcd_print("4. ");
+            lcd_print(&answer_no4);
+        }
+        _delay_ms(2000);
+        
+        lcd_clear_display();
+        
     }
+    
+    
 
 }          
