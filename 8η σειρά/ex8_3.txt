@@ -7,6 +7,12 @@
 #include<stdio.h>
 #include<string.h>
 
+// ----------------------------- For main --------------------------------------
+#define SIZE_ANSWER 16
+#define SIZE_STATUS 16
+#define SIZE_PAYLOAD 300
+#define OFFSET 13 
+
 //-------------------------- PCA -----------------------------------------------
 #define PCA9555_0_ADDRESS 0x40      //A0=A1=A2=0 by hardware
 #define TWI_READ 1                  // reading from twi device
@@ -345,12 +351,12 @@ void receive_response(char *response) {
         }
     }
     // Put with force spaces instead of null   
-    for(i; i<=9; i++){
-        response[i] = NULL;
+    for(i; i<16; i++){
+        response[i] = '\0';
     }
 }
 
-void lcd_print(const char* str) {
+void lcd_print(char* str) {
     while(*str) {
         lcd_data(*str++); // Send each character to the LCD
     }
@@ -508,11 +514,6 @@ uint8_t check(){
     return ((grammi|0xF0) & (stili|0x0F));
 }
 
-
-#define SIZE_ANSWER 10
-#define SIZE_STATUS 15
-#define SIZE_PAYLOAD 100
-#define OFFSET 13 
 int main() {
     DDRB = 0xFF;
     DDRC = 0x00;
@@ -525,71 +526,51 @@ int main() {
     
     lcd_clear_display();
     
-    // Waiting till ESP connects ...
-    while(1) {
-        transmit_command("ESP:connect\n");
-        
-        char answer[SIZE_ANSWER];
-        receive_response(answer);
-                
-        if (strcmp(answer, "Success\n") == 0) {
-
-            lcd_print("1.Success");
-            _delay_ms(2000);
-            
-            lcd_clear_display();
-            break;
-        }
-        else lcd_print("1.Fail");
-        _delay_ms(2000);
-        
-        lcd_clear_display();
-    } // end loop for ESP connection
-    
-    // Sending command for url ...
-    while(1) {
-        transmit_command("ESP:url:\"http://192.168.1.250:5000/data\"\n");
-        
-        char answer_no2[SIZE_ANSWER];
-        receive_response(answer_no2);
-        
-        if (strcmp(answer_no2, "Success\n") == 0) {
-            lcd_print("2.Success");
-            _delay_ms(2000);
-            
-            lcd_clear_display();
-            break;
-        }
-        else lcd_print("2.Fail");
-        _delay_ms(2000);
-        
-        lcd_clear_display();
-    } // end loop for ESP url
-    
-    while(1) {
-        transmit_command("ESP:payload:[{\"name\":\"team\",\"value\":\"23\"]\n");
-        
-        char answer_no3[SIZE_ANSWER];
-        receive_response(answer_no3);
-        
-        if (strcmp(answer_no3, "Success\n") == 0) {
-            lcd_print("3.Success");
-            _delay_ms(2000);
-            
-            lcd_clear_display();
-            break;
-        }
-        else lcd_print("3.Fail");
-        _delay_ms(2000);
-        
-        lcd_clear_display();
-    }
-    
-    
     bool pressed_no3 = false;
     bool pressed_hashtag = false;
     
-    while(1) { // temperature, H2O, no3, hashtag
+    while(1) {
+        // Waiting till ESP connects ...
+        while(1) {
+            transmit_command("ESP:connect\n");
+
+            char answer[SIZE_ANSWER];
+            receive_response(answer);
+
+            if (strcmp(answer, "Success\n") == 0) {
+                lcd_clear_display();
+                lcd_print("1.Success");
+                _delay_ms(2000);
+
+                lcd_clear_display();
+                break;
+            }
+            else lcd_print("1.Fail");
+            _delay_ms(2000);
+
+            lcd_clear_display();
+        } // end loop for ESP connection
+
+        // Sending command for url ...
+        while(1) {
+            transmit_command("ESP:url:\"http://192.168.1.250:5000/data\"\n");
+
+            char answer_no2[SIZE_ANSWER];
+            receive_response(answer_no2);
+
+            if (strcmp(answer_no2, "Success\n") == 0) {
+                lcd_print("2.Success");
+                _delay_ms(2000);
+
+                lcd_clear_display();
+                break;
+            }
+            else lcd_print("2.Fail");
+            _delay_ms(2000);
+
+            lcd_clear_display();
+        } // end loop for ESP url
+    
     
         // Getting the temperature 
         uint16_t temperature = GetTemperature();
@@ -625,7 +606,7 @@ int main() {
             result += OFFSET; // Took human temperature
 
         }
-
+        
 
         // Getting the ADC-PWM
         PWM_init();
@@ -634,7 +615,6 @@ int main() {
         // Connection of ADC0 with POT1
         uint16_t ADC_value = ADC_conversion();      // Read POT1
         int DC_VALUE = ADC_value;
-        //OCR1A = DC_VALUE;
         _delay_ms(100);         // Small delay for better performance
 
         int pressure = DC_VALUE * 20 / 1024; // Took human pressure
@@ -643,7 +623,7 @@ int main() {
         // Waiting for keypad ...
         uint8_t input = 0x00; 
         uint8_t savor;
-        //bool pressed_no3, pressed_hashtag;
+
         char status[SIZE_STATUS];
 
         // crucial for keypad activation with PCA
@@ -651,9 +631,9 @@ int main() {
         PCA9555_0_write(REG_OUTPUT_1,0x00);
 
         // Till now none of buttons 3 or # is pressed, so status is 'OK'
-        if (pressure > 12 | pressure < 4) { snprintf(status, sizeof(status), "CHECK PRESSURE"); }
+        if (pressed_no3 == true && pressed_hashtag == false) { snprintf(status, sizeof(status), "NURSE CALL"); }
+        else if (pressure > 12 | pressure < 4) { snprintf(status, sizeof(status), "CHECK PRESSURE"); }
         else if (result > 37 | result < 34) { snprintf(status, sizeof(status), "CHECK TEMP"); }
-        else if (pressed_no3 == true && pressed_hashtag == false) { snprintf(status, sizeof(status), "NURSE CALL"); }
         else snprintf(status, sizeof(status), "OK"); 
 
         lcd_clear_display();
@@ -678,7 +658,7 @@ int main() {
         input = check(); // Check for the first pressed key
        
         // Begin checking for pressed buttons
-        if (input == 0xFF) continue; 
+        if (input == 0xFF); 
         
         //first digit -> 3
         else {
@@ -704,34 +684,47 @@ int main() {
                 pressed_no3 = false;
             }
         }
+        _delay_ms(2000); // Delay to take the keys
         
+        dekadika = dekadika / 1000;
         
         char message[SIZE_PAYLOAD];
-        snprintf(message, sizeof(message), "ESP:payload:[{\"name\":\"temperature\",\"value\":\"%d\".\"%d\"},{\"name\":\"pressure\",\"value\":\"%d\"},{\"name\":\"team\",\"value\":\"23\"},{\"name\":\"status\",\"value\":\"%s\"}]\n", result, dekadika, pressure, status);
-        transmit_command(&message);
+        snprintf(message, sizeof(message), "ESP:payload:[{\"name\":\"temperature\",\"value\":\"%d.%d\"},{\"name\":\"pressure\",\"value\":\"%d\"},{\"name\":\"team\",\"value\":\"23\"},{\"name\":\"status\",\"value\":\"%s\"}]\n", result, dekadika, pressure, status);
+        transmit_command(message);
+        //_delay_ms(2000);
         
-        char answer_no4[SIZE_ANSWER];
-        receive_response(answer_no4);
-        
-        if (strcmp(answer_no4, "200 OK\n") == 0) {
+        char answer_no3[SIZE_ANSWER];
+        receive_response(answer_no3);
+
+        if (strcmp(answer_no3, "Success\n") == 0) {
             lcd_clear_display();
-            lcd_print("4. 200 OK");
+            lcd_print("3.Success");
             _delay_ms(2000);
             
-            lcd_clear_display();
-            break;
-        }
-        else {
-            lcd_clear_display();
-            lcd_print("4. ");
-            lcd_print(&answer_no4);
-        }
-        _delay_ms(2000);
-        
-        lcd_clear_display();
-        
-    }
-    
-    
+            transmit_command("ESP:transmit\n");
 
+            char answer_no4[SIZE_ANSWER];
+            receive_response(answer_no4);
+            
+            if (strcmp(answer_no4, "200 OK\n") == 0) {
+                lcd_clear_display();
+                lcd_print("4. 200 OK");
+                _delay_ms(2000);
+
+            }
+            else {
+                lcd_clear_display();
+                lcd_print("4.Fail");
+            }
+            _delay_ms(2000);
+        }
+        else 
+        {
+            lcd_clear_display();
+            lcd_print("3.Fail");
+            _delay_ms(2000);
+        }
+    }  
 }          
+
+
