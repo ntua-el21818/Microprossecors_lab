@@ -351,7 +351,7 @@ void receive_response(char *response) {
         }
     }
     // Put with force spaces instead of null   
-    for(i; i<16; i++){
+    for(i; i < 16; i++){
         response[i] = '\0';
     }
 }
@@ -359,6 +359,13 @@ void receive_response(char *response) {
 void lcd_print(char* str) {
     while(*str) {
         lcd_data(*str++); // Send each character to the LCD
+    }
+}
+
+void remove_newline(char *str) {
+    size_t len = strlen(str); // Get the length of the string
+    if (len > 0 && str[len - 1] == '\n') { // Check if the last character is '\n'
+        str[len - 1] = '\0'; // Replace '\n' with '\0'
     }
 }
 
@@ -617,7 +624,7 @@ int main() {
         int DC_VALUE = ADC_value;
         _delay_ms(100);         // Small delay for better performance
 
-        int pressure = DC_VALUE * 20 / 1024; // Took human pressure
+        int pressure = DC_VALUE * 20 / 1023; // Took human pressure
 
 
         // Waiting for keypad ...
@@ -708,13 +715,23 @@ int main() {
             
             if (strcmp(answer_no4, "200 OK\n") == 0) {
                 lcd_clear_display();
-                lcd_print("4. 200 OK");
+                //lcd_print("4. 200 OK");
+                
+                remove_newline(answer_no4);
+                
+                lcd_print("4. ");
+                lcd_print(answer_no4);
                 _delay_ms(2000);
 
             }
             else {
                 lcd_clear_display();
-                lcd_print("4.Fail");
+                //lcd_print("4.Fail");
+                
+                remove_newline(answer_no4);
+                
+                lcd_print("4. ");
+                lcd_print(answer_no4);
             }
             _delay_ms(2000);
         }
