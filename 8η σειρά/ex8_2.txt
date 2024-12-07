@@ -617,7 +617,7 @@ int main() {
         //OCR1A = DC_VALUE;
         _delay_ms(100);         // Small delay for better performance
 
-        int pressure = DC_VALUE * 20 / 1024; // Took human pressure
+        int pressure = DC_VALUE * 20 / 1023; // Took human pressure
 
 
         // Waiting for keypad ...
